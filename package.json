@@ -1,0 +1,30 @@
+{
+  "name": "nexusauto-qa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NexusAuto — QA Web Automation Platform (Next.js 15 + TypeScript + Selenium + Tailwind v4)",
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "lucide-react": "^0.474.0",
+    "next": "^15.2.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "selenium-webdriver": "^4.19.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^20.12.7",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/selenium-webdriver": "^4.1.26",
+    "eslint": "^9",
+    "eslint-config-next": "^15.2.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.4.5"
+  }
+}
