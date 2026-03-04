@@ -14,28 +14,41 @@ fs.mkdirSync(screenshotsDir, { recursive: true });
 
 export type Logger = (type: LogType, message: string, data?: Record<string, string>) => void;
 
-// Menyediakan data dummy cerdas berdasarkan konteks (nama/ID) dari input lapangan.
-// Menyediakan data dummy cerdas berdasarkan konteks (nama/ID) dari input lapangan.
-function getDummyValue(type: string, name = '', placeholder = '', id = '', credentials?: { email?: string; password?: string }): string {
-    const ctx = [name, placeholder, id].join('').toLowerCase();
+interface DummyOptions {
+    type: string;
+    name?: string;
+    placeholder?: string;
+    id?: string;
+    credentials?: { email?: string; password?: string };
+    contextLabel?: string;
+}
 
-    if (type === 'email' || ctx.includes('email')) return credentials?.email || 'test@nexusauto.dev';
-    if (type === 'password' || ctx.includes('password') || ctx.includes('sandi')) return credentials?.password || 'Rahasia123!';
-    if (type === 'tel' || ctx.includes('phone') || ctx.includes('telp')) return '081234567890';
-    if (type === 'number' || ctx.includes('age') || ctx.includes('qty')) return '25';
-    if (type === 'url' || ctx.includes('link')) return 'https://example.com';
-    if (type === 'date') return '2025-01-01';
+function getDummyValue({ type, name = '', placeholder = '', id = '', credentials, contextLabel = '' }: DummyOptions): string {
+    const ctx = [name, placeholder, id, contextLabel].join(' ').toLowerCase();
+
+    if (type === 'email' || ctx.includes('email') || ctx.includes('surel')) return credentials?.email || 'test@nexusauto.dev';
+    if (type === 'password' || ctx.includes('password') || ctx.includes('sandi') || ctx.includes('pass')) return credentials?.password || 'Rahasia123!';
+    if (type === 'tel' || ctx.includes('phone') || ctx.includes('telp') || ctx.includes('hp') || ctx.includes('whatsapp') || ctx.includes('wa ')) return '081234567890';
+    if (type === 'number' || ctx.includes('age') || ctx.includes('qty') || ctx.includes('umur') || ctx.includes('jumlah')) return '25';
+    if (type === 'url' || ctx.includes('link') || ctx.includes('website') || ctx.includes('situs')) return 'https://example.com';
+    if (type === 'date' || ctx.includes('tanggal') || ctx.includes('date') || ctx.includes('lahir')) return '2025-01-01';
 
     const ctxMap: Record<string, string> = {
+        nik: '3171234567890123', 'induk kependudukan': '3171234567890123',
+        ktp: '3171234567890123',
+        npwp: '12.345.678.9-012.000',
         nama: 'Budi Santoso', name: 'Budi Santoso',
-        alamat: 'Jl. Contoh No. 123', address: 'Jl. Contoh No. 123',
+        alamat: 'Gedung Kesenian Jakarta, Jl. Gedung Kesenian No.1', address: 'Gedung Kesenian Jakarta, Jl. Gedung Kesenian No.1',
         kota: 'Jakarta', city: 'Jakarta',
-        zip: '12345', pos: '12345',
+        provinsi: 'DKI Jakarta', state: 'DKI Jakarta',
+        zip: '10710', pos: '10710',
         username: 'buditest', user: 'buditest',
         company: 'Nexus Auto', perusahaan: 'Nexus Auto',
-        title: 'Testing Automasi', judul: 'Testing Automasi',
-        desc: 'Deskripsi tes otomatis', descrip: 'Deskripsi tes otomatis',
-        search: 'Cari sesuatu', cari: 'Cari sesuatu'
+        title: 'Testing Automasi Sistem', judul: 'Testing Automasi Sistem',
+        desc: 'Testing input deskripsi secara otomatis menggunakan robot QA.', descrip: 'Testing input deskripsi secara otomatis menggunakan robot QA.',
+        pesan: 'Halo, saya coba menghubungi via form QA NexusAuto.', message: 'Halo, saya coba menghubungi via form QA NexusAuto.',
+        search: 'Cari modul testing', cari: 'Cari modul testing',
+        captcha: 'AbCdEf',
     };
 
     for (const [key, val] of Object.entries(ctxMap)) {
@@ -76,15 +89,53 @@ async function scrollToBottom(driver: WebDriver, logger: Logger) {
     await driver.sleep(300);
 }
 
-// Crawl seluruh internal link aktif yang satu domain untuk dites secara mendalam.
+// Crawl Context Aware: Membaca teks pada elemen parent atau label terdekat.
+async function scrapeElementContext(driver: WebDriver, el: WebElement): Promise<string> {
+    try {
+        const id = await getAttr(el, 'id');
+        let contextText = '';
+
+        // Coba cari label berdasarkan For ID
+        if (id) {
+            const labels = await driver.findElements(By.css(`label[for="${id}"]`));
+            if (labels.length > 0) contextText = await labels[0].getText();
+        }
+
+        // Jika masih kosong, coba ekstrak teks murni di parent wrapper terdekatnya 
+        // yang sering menampung label implisit. 
+        // Menggunakan xpath ancestor yang memiliki teks pendek
+        if (!contextText) {
+            const parentText = await driver.executeScript<string>(
+                `return arguments[0].parentElement ? arguments[0].parentElement.innerText : ''`, el
+            );
+            // Ambil maksimal 50 karakter agar context tidak tercemar teks sampah panjang
+            if (parentText && parentText.length < 150) {
+                contextText = parentText.trim();
+            }
+        }
+
+        return contextText;
+    } catch {
+        return '';
+    }
+}
+
+// Deep Crawl (Menelusuri href sub-domain juga)
 async function discoverInternalLinks(driver: WebDriver, baseOrigin: string): Promise<string[]> {
     const anchors = await driver.findElements(By.css('a[href]'));
     const links = new Set<string>();
 
+    // Bersihkan host target (contoh.com) untuk pencocokan toleran sub-domain (seperti app.contoh.com)
+    const baseHost = new URL(baseOrigin).hostname.replace(/^www\./, '');
+
     for (const a of anchors) {
         try {
-            const url = new URL(await getAttr(a, 'href'));
-            if (url.origin === baseOrigin && !url.hash && !url.pathname.includes('.')) {
+            const href = await getAttr(a, 'href');
+            if (href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('javascript:')) continue;
+
+            const url = new URL(href);
+            // Toleransi Sub-domain: izinkan selama host aslinya berakhiran baseHost
+            if (url.hostname.endsWith(baseHost) && !url.hash && !url.pathname.includes('.')) {
                 links.add(url.origin + url.pathname);
             }
         } catch { /* abaikan error URL invalid */ }
@@ -138,7 +189,15 @@ async function testPage(driver: WebDriver, url: string, sessionId: number, pageI
                 if (!(await el.isSelected())) await driver.executeScript('arguments[0].click()', el);
                 res.push({ type, element: label, status: 'pass', action: 'dicentang' });
             } else {
-                const val = getDummyValue(type, await getAttr(el, 'name'), await getAttr(el, 'placeholder'), await getAttr(el, 'id'), credentials);
+                const ctxLabel = await scrapeElementContext(driver, el);
+                const val = getDummyValue({
+                    type,
+                    name: await getAttr(el, 'name'),
+                    placeholder: await getAttr(el, 'placeholder'),
+                    id: await getAttr(el, 'id'),
+                    credentials,
+                    contextLabel: ctxLabel
+                });
                 await el.clear();
                 await el.sendKeys(val);
                 res.push({ type: `input[${type}]`, element: label, status: 'pass', action: `diisi: ${val}` });
@@ -225,15 +284,32 @@ export async function runAutomation(url: string, logger: Logger, credentials?: {
     try {
         const origin = new URL(url).origin;
 
-        // Pemindaian Peta Situs secara dinamis (Halaman-halaman turunan)
-        logger('info', '🔍 Memindai seluruh internal link untuk dites...');
-        await driver.get(url);
-        await waitForPageLoad(driver);
-        const links = await discoverInternalLinks(driver, origin);
+        logger('info', '🔍 Memulai Deep Crawling link di seluruh halaman dan sub-domain...');
 
-        // Gabungkan link awal & semua link turunan, batasi maksimal 4 untuk testing agar optimal
-        const pages = [url, ...links.filter(l => l !== url && l !== url.replace(/\/$/, ''))].slice(0, 4);
-        logger('info', `📌 Total ${pages.length} halaman akan dites berturut-turut.`);
+        // Deep Crawl Logic - Sistem Queue BFS sederhana hingga batas Max_Pages (4)
+        const visitedPages = new Set<string>();
+        const queueToVisit = [url.replace(/\/$/, '')]; // Normalisasi tanpa trailing slash
+
+        while (queueToVisit.length > 0 && visitedPages.size < 4) {
+            const currentCrawl = queueToVisit.shift()!;
+            if (visitedPages.has(currentCrawl)) continue;
+
+            await driver.get(currentCrawl);
+            await waitForPageLoad(driver);
+
+            const discovered = await discoverInternalLinks(driver, origin);
+            discovered.forEach(link => {
+                const normLink = link.replace(/\/$/, '');
+                if (!visitedPages.has(normLink) && !queueToVisit.includes(normLink)) {
+                    queueToVisit.push(normLink);
+                }
+            });
+
+            visitedPages.add(currentCrawl);
+        }
+
+        const pages = Array.from(visitedPages);
+        logger('info', `📌 Crawling usai. Ditemukan ${pages.length} target halaman (Maksimal 4 agar optimal).`);
 
         // Pengetesan setiap Halaman
         for (let i = 0; i < pages.length; i++) {
