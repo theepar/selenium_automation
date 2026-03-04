@@ -1,4 +1,4 @@
-import { Builder, Browser, By, until, WebDriver, WebElement } from 'selenium-webdriver';
+import { Builder, Browser, By, WebDriver, WebElement } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome';
 import path from 'path';
 import fs from 'fs';
@@ -219,6 +219,7 @@ export async function runAutomation(url: string, logger: Logger, credentials?: {
         .addArguments('--start-maximized', '--disable-blink-features=AutomationControlled', '--log-level=3')
         .excludeSwitches('enable-automation');
 
+    // @ts-expect-error Selenium TypeScript definitions mismatch for ChromeOptions
     const driver = await new Builder().forBrowser(Browser.CHROME).setChromeOptions(options).build();
 
     try {
