@@ -1,61 +1,62 @@
-# NexusAuto — QA Web Automation Platform
+# NexusAuto
 
-NexusAuto adalah platform otomasi QA (Quality Assurance) berbasis web yang dirancang untuk melakukan pengujian end-to-end secara otomatis. Dibangun menggunakan Next.js 15, Tailwind CSS v4, dan ditenagai oleh performa tangguh Selenium WebDriver.
+NexusAuto adalah platform otomasi QA berbasis web yang dirancang untuk melakukan pengujian end-to-end secara otomatis. Dibangun menggunakan Next.js 15, Tailwind CSS v4, dan ditenagai oleh performa Selenium WebDriver.
 
-## ✨ Fitur Utama
+## Fitur Utama
 
-- **Auto-fill Pintar**: Otomatis mendeteksi tipe input (email, password, text, angka, date, dll) dan mengisinya dengan *dummy data* yang relevan.
-- **Auto-klik Tombol**: Mendeteksi dan melakukan klik pada semua tombol aksi, tombol submit, dan navigasi yang aktif.
-- **Deep Crawling**: Tidak hanya menguji satu halaman, NexusAuto akan mencari semua internal link (1 domain) dan menelusurinya hingga kedalaman maksimal 4 halaman.
-- **Progressive Scrolling**: Melakukan scroll otomatis ke bawah halaman untuk memicu semua elemen lazy-load sebelum melakukan interaksi.
-- **Screenshot Otomatis**: Mengambil gambar layar pada berbagai tahapan progres (saat halaman dimuat, sesudah form diisi penuh, dan di akhir tes).
-- **Log Real-time**: Memanfaatkan Server-Sent Events (SSE) yang ringan untuk mendistribusikan log status ke antarmuka terminal bergaya hacker secara langsung.
-- **UI Premium**: Desain antarmuka Dark Mode mengkilap, memanfaatkan desain kaca (glassmorphism), highlight warna neon, dan animasi cantik berbasis TailwindCSS & Lucide Icons.
+- Auto-fill Pintar: Otomatis mendeteksi tipe input (email, password, teks, angka, tanggal, dll) dan mengisinya dengan dummy data yang relevan. Tersedia juga opsi untuk memasukkan kredensial kustom jika dibutuhkan.
+- Auto-klik Tombol: Mendeteksi dan melakukan klik pada semua tombol aksi, tombol submit, dan navigasi yang aktif.
+- Deep Crawling: Tidak hanya menguji satu halaman, NexusAuto akan mencari semua internal link dalam satu domain dan menelusurinya hingga kedalaman maksimal 4 halaman.
+- Progressive Scrolling: Melakukan scroll otomatis ke bawah halaman untuk memicu semua elemen lazy-load sebelum melakukan interaksi.
+- Tangkapan Layar Otomatis: Mengambil gambar layar pada berbagai tahapan progres (saat halaman dimuat dan sesudah form diisi penuh). Gambar yang lama akan otomatis dibersihkan pada iterasi pengujian berikutnya.
+- Intervensi Manual OAuth: Otomatis menghentikan sementara proses otomatisasi selama 30 detik saat mendeteksi halaman login seperti Google OAuth, memberikan waktu bagi pengguna untuk login secara manual.
+- Log Real-time: Memanfaatkan Server-Sent Events (SSE) yang ringan untuk mendistribusikan log status ke antarmuka secara langsung.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-- **Framework**: Next.js 15 (App Router, Turbopack)
-- **Styling**: Tailwind CSS v4
-- **Otomasi Web**: Selenium WebDriver (di NodeJS runtime) -> + built in Selenium Manager
-- **Icon**: Lucide React
-- **Bahasa**: TypeScript
+- Framework: Next.js 15 (App Router, Turbopack)
+- Styling: Tailwind CSS v4
+- Otomasi Web: Selenium WebDriver dengan Selenium Manager
+- UI Icons: Lucide React
+- Bahasa: TypeScript
 
-## 🚀 Instalasi & Menjalankan (Development)
+## Instalasi dan Persiapan
 
-Pastikan kamu memiliki **Node.js** terinstal (minimal LTS/v20) serta browser Chrome. (Tidak perlu repot install ChromeDriver, Selenium Manager sudah mengatasinya).
+Pastikan kamu memiliki Node.js terinstal (minimal versi LTS/v20) serta browser Google Chrome. Tidak perlu menginstal ChromeDriver secara manual karena Selenium Manager sudah mengatasinya secara otomatis.
 
 1. Clone repositori ini atau masuk ke root direktori
 2. Instal dependencies:
    ```bash
    npm install
    ```
-3. Mulai server pengembangan memakai Turbopack:
+3. Mulai development server:
    ```bash
    npm run dev
    ```
-4. Buka di browser: `http://localhost:3000` (Port mungkin berganti ke `3001` apabila 3000 sedang terpakai).
+4. Buka di browser: `http://localhost:3000` (atau port lain yang ditampilkan di terminal jika 3000 sedang terpakai).
 
-## 💡 Cara Penggunaan
+## Cara Penggunaan
 
-1. Ketik URL target pengujian pada kolom input bola dunia (misal: `https://example.com`). Pastikan url valid memakai `http` atau `https`.
-2. Klik tombol **Run Test**.
-3. Santai dan lihat Panel *Terminal NexusAuto* meludahkan log eksekusi langsung ke layarmu dengan indikator warnanya!
-4. Di akhir, cek **Results Gallery** untuk melihat detail apa saja yang dicek, apa yang dilewati, serta lihat foto screenshot dari hasil aksi.
+1. Ketik URL target pengujian pada kolom input (misal: `https://example.com`). Pastikan URL valid diawali dengan `http://` atau `https://`.
+2. Jika perlu login, kamu bisa mengisi bagian Custom Login Credentials. Kredensial ini hanya diteruskan ke instance Selenium lokal dan tidak pernah disimpan.
+3. Klik tombol Run Test.
+4. Perhatikan panel log terminal untuk melihat proses yang sedang berjalan secara live.
+5. Jika otomatisasi menemukan halaman OAuth (seperti akun Google), proses akan jeda selama 30 detik agar kamu bisa menyelesaikan login secara manual di browser yang terbuka.
+6. Setelah selesai, cek Results Gallery untuk melihat rangkuman hasil dan tangkapan layar dari proses pengujian.
 
-## 🗂️ Struktur Proyek
+## Struktur Proyek
 
 ```text
 web-automation/
-├── app/                  # Next.js App Router (Halaman Utama Utama, Layout, UI)
-│   ├── globals.css       # File konfigurasi Tailwind & Custom Font Setup
-│   └── api/run-test/     # Endpoint Server (SSE Streaming Log Selenium)
-├── components/           # UI Component Module (Header, Logs, Results, Screenshots)
+├── app/                  # Route Next.js, layout utama, dan antarmuka
+│   ├── globals.css       # Konfigurasi Tailwind dan styling global
+│   └── api/run-test/     # Endpoint SSE untuk streaming log Selenium
+├── components/           # Komponen UI modular
 ├── lib/
-│   └── automator.ts      # 🧠 Inti Logika Selenium (Pencarian Form, Algoritma Scroll, dll)
+│   └── automator.ts      # Inti logika Selenium WebDriver
 ├── public/
-│   └── screenshots/      # Folder tempat penyimpanan gambar test otomatis 
+│   └── screenshots/      # Lokasi penyimpanan hasil tangkapan layar (dibersihkan otomatis)
 ├── types/
-│   └── index.ts          # Typings global
-├── package.json          # Dependencies & Configs
-└── README.md
+│   └── index.ts          # Definisi tipe TypeScript
+└── package.json          # Konfigurasi dependensi proyek
 ```

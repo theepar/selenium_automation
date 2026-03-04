@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Globe, Play, Square, RotateCcw } from 'lucide-react';
+import { Globe, Play, Square, RotateCcw, Lock } from 'lucide-react';
 import Header from '@/components/Header';
 import LogPanel from '@/components/LogPanel';
 import ResultsTable from '@/components/ResultsTable';
@@ -12,6 +12,8 @@ type RunState = 'idle' | 'running' | 'done' | 'error';
 
 export default function HomePage() {
   const [url, setUrl]           = useState('');
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
   const [runState, setRunState] = useState<RunState>('idle');
   const [logs, setLogs]         = useState<LogEvent[]>([]);
   const [output, setOutput]     = useState<AutomationOutput | null>(null);
@@ -34,7 +36,10 @@ export default function HomePage() {
       const res = await fetch('/api/run-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ 
+          url: url.trim(),
+          credentials: { email: email.trim(), password: password.trim() }
+        }),
       });
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
@@ -73,7 +78,7 @@ export default function HomePage() {
   }
 
   function handleStop()  { readerRef.current?.cancel(); setRunState('idle'); }
-  function handleReset() { setLogs([]); setOutput(null); setShots([]); setRunState('idle'); setUrl(''); }
+  function handleReset() { setLogs([]); setOutput(null); setShots([]); setRunState('idle'); setUrl(''); setEmail(''); setPassword(''); }
 
   const isRunning = runState === 'running';
   const isDone    = runState === 'done';
@@ -165,6 +170,35 @@ export default function HomePage() {
                 )}
               </div>
             </div>
+
+            {/* ── Advanced Options: Custom Credentials ── */}
+            {!isRunning && !hasLogs && (
+              <div className="mt-5 animate-fade-in-up border-t border-slate-800 pt-5 text-left" style={{ animationDelay: '0.15s', opacity: 0 }}>
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
+                  <Lock size={14} className="text-indigo-400" />
+                  Custom Login Credentials <span className="text-[10px] font-normal text-slate-500">(Opsional)</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    type="email"
+                    placeholder="Email Login"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700/50 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Password Login"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700/50 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50"
+                  />
+                </div>
+                <p className="mt-3 text-[11px] text-slate-500">
+                  * Kredensial ini hanya akan disuntikkan ke sesi browser Selenium lokal (tidak disimpan di server manapun). Gunakan untuk test yang butuh akses login otomatis. Jika web pakai OAuth (seperti Google Login), automation akan berhenti sesaat (30 detik) agar kamu bisa login manual.
+                </p>
+              </div>
+            )}
 
             {/* Status bar */}
             {runState !== 'idle' && (

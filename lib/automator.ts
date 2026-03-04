@@ -15,11 +15,12 @@ fs.mkdirSync(screenshotsDir, { recursive: true });
 export type Logger = (type: LogType, message: string, data?: Record<string, string>) => void;
 
 // Menyediakan data dummy cerdas berdasarkan konteks (nama/ID) dari input lapangan.
-function getDummyValue(type: string, name = '', placeholder = '', id = ''): string {
+// Menyediakan data dummy cerdas berdasarkan konteks (nama/ID) dari input lapangan.
+function getDummyValue(type: string, name = '', placeholder = '', id = '', credentials?: { email?: string; password?: string }): string {
     const ctx = [name, placeholder, id].join('').toLowerCase();
 
-    if (type === 'email' || ctx.includes('email')) return 'test@nexusauto.dev';
-    if (type === 'password' || ctx.includes('password') || ctx.includes('sandi')) return 'Rahasia123!';
+    if (type === 'email' || ctx.includes('email')) return credentials?.email || 'test@nexusauto.dev';
+    if (type === 'password' || ctx.includes('password') || ctx.includes('sandi')) return credentials?.password || 'Rahasia123!';
     if (type === 'tel' || ctx.includes('phone') || ctx.includes('telp')) return '081234567890';
     if (type === 'number' || ctx.includes('age') || ctx.includes('qty')) return '25';
     if (type === 'url' || ctx.includes('link')) return 'https://example.com';
@@ -92,7 +93,7 @@ async function discoverInternalLinks(driver: WebDriver, baseOrigin: string): Pro
 }
 
 // Logika Utama: Isi seluruh form (input text, textarea, dropdown) dan klik semua tombol.
-async function testPage(driver: WebDriver, url: string, sessionId: number, pageIndex: number, logger: Logger, allShots: string[]): Promise<TestResult[]> {
+async function testPage(driver: WebDriver, url: string, sessionId: number, pageIndex: number, logger: Logger, allShots: string[], credentials?: { email?: string; password?: string }): Promise<TestResult[]> {
     const res: TestResult[] = [];
     const pfx = `p${pageIndex}`;
 
@@ -100,6 +101,22 @@ async function testPage(driver: WebDriver, url: string, sessionId: number, pageI
     await driver.get(url);
     await waitForPageLoad(driver);
     logger('info', `📄 Judul halaman: "${await driver.getTitle()}"`);
+
+    const currentUrlStr = await driver.getCurrentUrl();
+    const lowerUrl = currentUrlStr.toLowerCase();
+
+    if (
+        lowerUrl.includes('accounts.google.com') ||
+        lowerUrl.includes('oauth') ||
+        lowerUrl.includes('login') ||
+        lowerUrl.includes('signin') ||
+        lowerUrl.includes('auth') ||
+        lowerUrl.includes('sso')
+    ) {
+        logger('warn', '⏳ Halaman Login/OAuth Terdeteksi! Menunggu intervensi manual selama 30 detik...');
+        await driver.sleep(30000);
+        logger('info', '▶️ 30 Detik usai, melanjutkan pengetesan form...');
+    }
 
     await scrollToBottom(driver, logger);
 
@@ -121,7 +138,7 @@ async function testPage(driver: WebDriver, url: string, sessionId: number, pageI
                 if (!(await el.isSelected())) await driver.executeScript('arguments[0].click()', el);
                 res.push({ type, element: label, status: 'pass', action: 'dicentang' });
             } else {
-                const val = getDummyValue(type, await getAttr(el, 'name'), await getAttr(el, 'placeholder'));
+                const val = getDummyValue(type, await getAttr(el, 'name'), await getAttr(el, 'placeholder'), await getAttr(el, 'id'), credentials);
                 await el.clear();
                 await el.sendKeys(val);
                 res.push({ type: `input[${type}]`, element: label, status: 'pass', action: `diisi: ${val}` });
@@ -174,12 +191,9 @@ async function testPage(driver: WebDriver, url: string, sessionId: number, pageI
             await driver.sleep(1200);
 
             const newUrl = await driver.getCurrentUrl();
-            const ssBtn = `${sessionId}_${pfx}_btn_${i}.png`;
-            await takeScreenshot(driver, ssBtn);
-            allShots.push(ssBtn);
 
             const navigated = currentUrl !== newUrl;
-            res.push({ type: 'button', element: text, status: 'pass', action: navigated ? 'klik & navigasi' : 'klik ok', screenshot: ssBtn });
+            res.push({ type: 'button', element: text, status: 'pass', action: navigated ? 'klik & navigasi' : 'klik ok' });
 
             if (navigated) {
                 await driver.get(url); // kembali ke original URL jika klik memicu pindah halaman
@@ -192,7 +206,7 @@ async function testPage(driver: WebDriver, url: string, sessionId: number, pageI
     return res;
 }
 
-export async function runAutomation(url: string, logger: Logger): Promise<AutomationOutput> {
+export async function runAutomation(url: string, logger: Logger, credentials?: { email?: string; password?: string }): Promise<AutomationOutput> {
     const sessionId = Date.now();
     const allShots: string[] = [];
     const allRes: TestResult[] = [];
@@ -222,7 +236,7 @@ export async function runAutomation(url: string, logger: Logger): Promise<Automa
 
         // Pengetesan setiap Halaman
         for (let i = 0; i < pages.length; i++) {
-            const pageRes = await testPage(driver, pages[i], sessionId, i, logger, allShots);
+            const pageRes = await testPage(driver, pages[i], sessionId, i, logger, allShots, credentials);
             allRes.push(...pageRes);
         }
 
