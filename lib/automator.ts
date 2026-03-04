@@ -5,7 +5,12 @@ import fs from 'fs';
 import type { TestResult, AutomationSummary, AutomationOutput, LogType } from '@/types';
 
 const screenshotsDir = path.join(process.cwd(), 'public', 'screenshots');
-if (!fs.existsSync(screenshotsDir)) fs.mkdirSync(screenshotsDir, { recursive: true });
+
+// Pastikan folder bersih dari ss lama sebelum testing jalan
+if (fs.existsSync(screenshotsDir)) {
+    fs.rmSync(screenshotsDir, { recursive: true, force: true });
+}
+fs.mkdirSync(screenshotsDir, { recursive: true });
 
 export type Logger = (type: LogType, message: string, data?: Record<string, string>) => void;
 
