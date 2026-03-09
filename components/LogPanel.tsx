@@ -30,7 +30,7 @@ export default function LogPanel({ logs, isRunning }: LogPanelProps) {
             <span className="h-3 w-3 rounded-full bg-yellow-500/70" />
             <span className="h-3 w-3 rounded-full bg-green-500/70" />
           </div>
-          <span className="font-mono text-xs text-slate-500">nexusauto — terminal</span>
+          <span className="font-mono text-xs text-slate-500">scrutiny — log</span>
           {isRunning && (
             <span className="flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-cyan-400">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse-dot" />
@@ -42,11 +42,11 @@ export default function LogPanel({ logs, isRunning }: LogPanelProps) {
       </div>
 
       {/* ── Log body ── */}
-      <div id="log-body" className="min-h-60 max-h-[480px] overflow-y-auto p-3 font-mono text-[12.5px]">
+      <div id="log-body" className="min-h-40 sm:min-h-60 max-h-[300px] sm:max-h-[480px] overflow-y-auto p-3 font-mono text-[12.5px]">
         {logs.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-slate-600">
             <ClipboardList size={28} strokeWidth={1.5} />
-            <p>Log akan muncul di sini setelah automation berjalan...</p>
+            <p>Logs will appear here once the automation starts...</p>
           </div>
         ) : (
           logs.map((log, i) => {

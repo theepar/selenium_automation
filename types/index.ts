@@ -22,6 +22,7 @@ export interface AutomationOutput {
     results: TestResult[];
     summary: AutomationSummary;
     screenshots: string[];
+    recording?: string; // filename video di /recordings/
 }
 
 // ─── SSE Log Event Types ─────────────────────────────────────────────────────

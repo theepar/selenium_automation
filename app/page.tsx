@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Globe, Play, Square, RotateCcw, Lock } from 'lucide-react';
-import Header from '@/components/Header';
+import { Globe, Play, Square, RotateCcw, Lock, Video, ChevronDown, ChevronUp } from 'lucide-react';
 import LogPanel from '@/components/LogPanel';
 import ResultsTable from '@/components/ResultsTable';
 import ScreenshotGallery from '@/components/ScreenshotGallery';
@@ -11,40 +10,48 @@ import type { LogEvent, AutomationOutput } from '@/types';
 type RunState = 'idle' | 'running' | 'done' | 'error';
 
 export default function HomePage() {
-  const [url, setUrl]           = useState('');
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [runState, setRunState] = useState<RunState>('idle');
-  const [logs, setLogs]         = useState<LogEvent[]>([]);
-  const [output, setOutput]     = useState<AutomationOutput | null>(null);
-  const [shots, setShots]       = useState<string[]>([]);
-  const readerRef               = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const [targetUrl, setTargetUrl]       = useState('');
+  const [email, setEmail]               = useState('');
+  const [password, setPassword]         = useState('');
+  const [runState, setRunState]         = useState<RunState>('idle');
+  const [logs, setLogs]                 = useState<LogEvent[]>([]);
+  const [output, setOutput]             = useState<AutomationOutput | null>(null);
+  const [screenshots, setScreenshots]   = useState<string[]>([]);
+  const [recording, setRecording]       = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const streamReaderRef                 = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 
   useEffect(() => {
-    const el = document.getElementById('log-body');
-    if (el) el.scrollTop = el.scrollHeight;
+    const logContainer = document.getElementById('log-body');
+    if (logContainer) logContainer.scrollTop = logContainer.scrollHeight;
   }, [logs]);
 
   async function handleRun() {
-    if (!url.trim() || runState === 'running') return;
+    if (!targetUrl.trim() || runState === 'running') return;
     setRunState('running');
     setLogs([]);
     setOutput(null);
-    setShots([]);
+    setScreenshots([]);
+    setRecording(null);
 
     try {
-      const res = await fetch('/api/run-test', {
+      const response = await fetch('/api/run-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          url: url.trim(),
-          credentials: { email: email.trim(), password: password.trim() }
+        body: JSON.stringify({
+          url: targetUrl.trim(),
+          credentials: { email: email.trim(), password: password.trim() },
         }),
       });
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
-      const reader  = res.body.getReader();
-      readerRef.current = reader;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        throw new Error(errorData.error ?? `HTTP ${response.status}`);
+      }
+      if (!response.body) throw new Error('No response stream received.');
+
+      const reader = response.body.getReader();
+      streamReaderRef.current = reader;
       const decoder = new TextDecoder();
       let buffer = '';
 
@@ -60,25 +67,41 @@ export default function HomePage() {
           if (!raw) continue;
           try {
             const event: LogEvent = JSON.parse(raw);
-            if (event.type === 'screenshot' && event.file) setShots((p) => [...p, event.file!]);
+            if (event.type === 'screenshot' && event.file) setScreenshots((prev) => [...prev, event.file!]);
             if (event.type === 'done' && event.result) {
               setOutput(event.result);
-              setShots((p) => [...p, ...event.result!.screenshots.filter((s) => !p.includes(s))]);
+              setScreenshots((prev) => [...prev, ...event.result!.screenshots.filter((s) => !prev.includes(s))]);
+              if (event.result.recording) setRecording(event.result.recording);
               setRunState('done');
-            } else if (event.type === 'error') setRunState('error');
-            setLogs((p) => [...p, event]);
-          } catch { /* non-JSON SSE chunk */ }
+            } else if (event.type === 'error') {
+              setRunState('error');
+            }
+            setLogs((prev) => [...prev, event]);
+          } catch { /* non-JSON SSE chunk, skip */ }
         }
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setLogs((p) => [...p, { type: 'error', message: `💥 ${msg}`, timestamp: new Date().toISOString() }]);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setLogs((prev) => [...prev, { type: 'error', message: errorMessage, timestamp: new Date().toISOString() }]);
       setRunState('error');
     }
   }
 
-  function handleStop()  { readerRef.current?.cancel(); setRunState('idle'); }
-  function handleReset() { setLogs([]); setOutput(null); setShots([]); setRunState('idle'); setUrl(''); setEmail(''); setPassword(''); }
+  function handleStop() {
+    streamReaderRef.current?.cancel();
+    setRunState('idle');
+  }
+
+  function handleReset() {
+    setLogs([]);
+    setOutput(null);
+    setScreenshots([]);
+    setRecording(null);
+    setRunState('idle');
+    setTargetUrl('');
+    setEmail('');
+    setPassword('');
+  }
 
   const isRunning = runState === 'running';
   const isDone    = runState === 'done';
@@ -86,169 +109,195 @@ export default function HomePage() {
   const hasLogs   = logs.length > 0 || isRunning;
 
   return (
-    <>
-      <Header />
+    <div className="min-h-screen bg-[#f8faff] text-slate-800 font-sans relative selection:bg-blue-200">
+      <div
+        className="absolute inset-0 pointer-events-none z-0 opacity-[0.4]"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, #dbeafe 1px, transparent 1px),
+            linear-gradient(to bottom, #dbeafe 1px, transparent 1px)
+          `,
+          backgroundSize: '40px 40px',
+        }}
+      />
 
-      <main className="min-h-screen pt-8">
-        <div className="mx-auto max-w-5xl px-6 pb-20">
+      <main className="relative z-10 pt-12 sm:pt-16 md:pt-24 pb-20">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
 
-          {/* ── Hero ────────────────────────────────────────────────── */}
-          <section className="animate-fade-in-up py-14 text-center">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/8 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-cyan-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
-              QA Automation — Selenium WebDriver
-            </div>
-            <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-slate-100 sm:text-5xl">
-              Automated Web{' '}
-              <span className="bg-linear-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
-                QA Testing
-              </span>
-            </h1>
-            <p className="mx-auto max-w-lg text-base leading-relaxed text-slate-400">
-              Masukkan URL target — NexusAuto akan mendeteksi dan mengisi semua
-              form, mengklik tombol, serta menangkap screenshot secara real-time.
-            </p>
-          </section>
-
-          {/* ── URL Input Card ───────────────────────────────────────── */}
-          <div
-            className="animate-fade-in-up rounded-2xl border border-slate-700/40 bg-slate-900 p-6 shadow-xl"
-            style={{ animationDelay: '0.1s', opacity: 0 }}
-          >
-            <div className="flex flex-wrap gap-3">
-              {/* URL input */}
-              <div className="relative min-w-[240px] flex-1">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
-                  <Globe size={15} />
+          {/* Hero */}
+          {!hasLogs && (
+            <div className="mb-10 sm:mb-12 text-center md:text-left">
+              <p className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight mb-4">
+                Scrutiny
+              </p>
+              <h1 className="text-3xl sm:text-4xl md:text-6xl font-extrabold tracking-tight text-slate-900 leading-tight">
+                Automated Web QA <br className="hidden md:block" />
+                <span className="bg-linear-to-r from-[#ff5e62] to-[#ff9966] bg-clip-text text-transparent">
+                  Testing Made Simple
                 </span>
+              </h1>
+              <p className="mt-5 text-base sm:text-lg text-slate-600 max-w-2xl mx-auto md:mx-0">
+                Enter a target URL. Scrutiny will crawl every page, fill all forms,
+                and record the full browser session in real-time.
+              </p>
+            </div>
+          )}
+
+          {/* Input Card */}
+          <div className="bg-white rounded-3xl sm:rounded-4xl border border-blue-50 p-2 sm:p-3 shadow-xl shadow-blue-900/5">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              {/* URL input */}
+              <div className="relative flex-1 bg-slate-50 rounded-2xl border border-slate-100 flex items-center px-3 sm:px-4 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                <Globe className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 shrink-0" />
                 <input
                   id="target-url"
                   type="url"
                   placeholder="https://example.com"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleRun()}
+                  value={targetUrl}
+                  onChange={(event) => setTargetUrl(event.target.value)}
+                  onKeyDown={(event) => event.key === 'Enter' && handleRun()}
                   disabled={isRunning}
                   autoComplete="off"
                   spellCheck={false}
-                  className="w-full rounded-lg border border-slate-700/50 bg-slate-950 py-3.5 pl-11 pr-4 font-mono text-[14px] text-slate-100 outline-none placeholder:text-slate-600 transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50"
+                  className="w-full bg-transparent border-none py-3 sm:py-4 px-2 sm:px-3 text-slate-900 placeholder:text-slate-400 focus:outline-none text-base sm:text-lg disabled:opacity-50"
                 />
               </div>
 
-              {/* Buttons */}
-              <div className="flex items-center gap-2">
+              {/* Action buttons */}
+              <div className="flex gap-2 sm:shrink-0">
                 {isRunning ? (
                   <button
-                    id="stop-btn"
                     onClick={handleStop}
-                    className="flex items-center gap-2 rounded-lg border border-slate-700 bg-transparent px-5 py-3.5 text-sm font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-slate-100"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 min-h-[52px] sm:min-h-[60px] rounded-2xl bg-slate-100 px-6 sm:px-8 text-sm sm:text-base font-bold text-slate-700 transition-colors hover:bg-slate-200"
                   >
-                    <Square size={13} />
-                    Stop
+                    <Square size={16} /> Stop
                   </button>
                 ) : (
                   <button
-                    id="run-btn"
                     onClick={handleRun}
-                    disabled={!url.trim()}
-                    className="flex items-center gap-2 rounded-lg bg-linear-to-r from-indigo-600 to-indigo-500 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-indigo-500/40 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                    disabled={!targetUrl.trim()}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 min-h-[52px] sm:min-h-[60px] rounded-2xl bg-linear-to-r from-[#ff5e62] to-[#ff9966] px-6 sm:px-8 text-sm sm:text-base font-bold text-white transition-transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-orange-500/25 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                   >
-                    <Play size={14} />
-                    Run Test
+                    <Play size={16} fill="currentColor" /> Run Test
                   </button>
                 )}
 
                 {(isDone || isError || logs.length > 0) && !isRunning && (
                   <button
-                    id="reset-btn"
                     onClick={handleReset}
-                    className="flex items-center gap-2 rounded-lg border border-slate-700 bg-transparent px-4 py-3.5 text-sm font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-slate-100"
+                    title="Reset"
+                    className="flex items-center justify-center min-h-[52px] sm:min-h-[60px] w-[52px] sm:w-[60px] rounded-2xl border-2 border-slate-100 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 shrink-0"
                   >
-                    <RotateCcw size={13} />
-                    Reset
+                    <RotateCcw size={18} />
                   </button>
                 )}
               </div>
             </div>
 
-            {/* ── Advanced Options: Custom Credentials ── */}
+            {/* Credentials */}
             {!isRunning && !hasLogs && (
-              <div className="mt-5 animate-fade-in-up border-t border-slate-800 pt-5 text-left" style={{ animationDelay: '0.15s', opacity: 0 }}>
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
-                  <Lock size={14} className="text-indigo-400" />
-                  Custom Login Credentials <span className="text-[10px] font-normal text-slate-500">(Opsional)</span>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <input
-                    type="email"
-                    placeholder="Email Login"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700/50 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50"
-                  />
-                  <input
-                    type="password"
-                    placeholder="Password Login"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700/50 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50"
-                  />
-                </div>
-                <p className="mt-3 text-[11px] text-slate-500">
-                  * Kredensial ini hanya akan disuntikkan ke sesi browser Selenium lokal (tidak disimpan di server manapun). Gunakan untuk test yang butuh akses login otomatis. Jika web pakai OAuth (seperti Google Login), automation akan berhenti sesaat (30 detik) agar kamu bisa login manual.
-                </p>
-              </div>
-            )}
+              <div className="mt-2 sm:mt-3 px-1 sm:px-2 pb-1 sm:pb-2">
+                <button
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors py-2 px-1"
+                >
+                  <Lock size={13} />
+                  Login Credentials (Optional)
+                  {showAdvanced ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
 
-            {/* Status bar */}
-            {runState !== 'idle' && (
-              <div className="mt-4 flex items-center gap-2 border-t border-slate-800 pt-4">
-                <span
-                  className={`inline-block h-2 w-2 rounded-full ${
-                    isRunning ? 'animate-pulse-dot bg-cyan-400'
-                    : isDone  ? 'bg-green-400'
-                    : 'bg-red-400'
-                  }`}
-                />
-                <span className="text-sm text-slate-400">
-                  {isRunning && 'Automation sedang berjalan…'}
-                  {isDone && `✅ Selesai! ${output?.summary.passed ?? 0} passed · ${output?.summary.failed ?? 0} failed · ${output?.summary.skipped ?? 0} skipped`}
-                  {isError && '❌ Terjadi error saat automation.'}
-                </span>
+                {showAdvanced && (
+                  <div className="mt-2 grid gap-2 sm:gap-3 sm:grid-cols-2 p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                    />
+                    <input
+                      type="password"
+                      placeholder="Password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                    />
+                    <p className="sm:col-span-2 text-xs text-slate-500">
+                      Credentials are injected only into the local Selenium browser session and are never stored.
+                      Automation pauses for 30 seconds if an OAuth page is detected.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* ── Feature chips (idle only) ────────────────────────────── */}
-          {!hasLogs && (
-            <div
-              className="animate-fade-in-up mt-6 flex flex-wrap justify-center gap-2"
-              style={{ animationDelay: '0.2s', opacity: 0 }}
-            >
-              {[
-                '📝 Auto-fill all forms',
-                '🖱️ Click all buttons',
-                '📸 Capture screenshots',
-                '📊 Detailed reports',
-                '⚡ Real-time SSE logs',
-              ].map((label) => (
-                <span
-                  key={label}
-                  className="rounded-full border border-slate-700/50 bg-slate-900/60 px-4 py-1.5 text-xs text-slate-500 transition hover:border-indigo-500/30 hover:text-slate-300"
-                >
-                  {label}
-                </span>
-              ))}
+          {/* Status Indicator */}
+          {runState !== 'idle' && (
+            <div className="mt-4 sm:mt-6 flex flex-wrap items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 bg-white rounded-full border border-slate-200 shadow-sm w-fit max-w-full">
+              <span className="relative flex h-3 w-3 shrink-0">
+                {isRunning && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />}
+                <span className={`relative inline-flex rounded-full h-3 w-3 ${
+                  isRunning ? 'bg-blue-500' : isDone ? 'bg-emerald-500' : 'bg-red-500'
+                }`} />
+              </span>
+              <span className="text-xs sm:text-sm font-semibold text-slate-700">
+                {isRunning && 'Automation running…'}
+                {isDone && `Done! ${output?.summary.passed ?? 0} passed · ${output?.summary.failed ?? 0} failed`}
+                {isError && 'An error occurred during automation.'}
+              </span>
             </div>
           )}
 
-          {/* ── Sections ─────────────────────────────────────────────── */}
-          {hasLogs  && <div className="mt-6"><LogPanel logs={logs} isRunning={isRunning} /></div>}
-          {output   && <div className="mt-6"><ResultsTable results={output.results} /></div>}
-          {shots.length > 0 && <div className="mt-6"><ScreenshotGallery screenshots={shots} /></div>}
+          {/* Results */}
+          <div className="mt-8 sm:mt-10 space-y-6 sm:space-y-8">
+            {hasLogs && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <LogPanel logs={logs} isRunning={isRunning} />
+              </div>
+            )}
+
+            {output && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
+                <ResultsTable results={output.results} />
+              </div>
+            )}
+
+            {screenshots.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
+                <ScreenshotGallery screenshots={screenshots} />
+              </div>
+            )}
+
+            {recording && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 sm:px-6 py-3 sm:py-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                    <Video size={16} className="text-blue-500" />
+                    Session Recording
+                  </h3>
+                  <a
+                    href={`/recordings/${recording}`}
+                    download
+                    className="text-xs font-bold text-[#ff5e62] hover:text-[#ff9966] bg-[#ff5e62]/10 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full transition-colors whitespace-nowrap"
+                  >
+                    Download .mp4
+                  </a>
+                </div>
+                <div className="p-3 sm:p-6 bg-slate-100/50">
+                  <video
+                    src={`/recordings/${recording}`}
+                    controls
+                    className="w-full rounded-xl border border-slate-200 shadow-sm bg-black"
+                    style={{ maxHeight: '300px' }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
         </div>
       </main>
-    </>
+    </div>
   );
 }
