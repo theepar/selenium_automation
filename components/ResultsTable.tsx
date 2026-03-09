@@ -21,10 +21,10 @@ export default function ResultsTable({ results }: ResultsTableProps) {
   const total   = results.length;
 
   return (
-    <div className="animate-fade-in-up rounded-xl border border-slate-700/40 bg-slate-900 p-6">
+    <div className="animate-fade-in-up rounded-xl border border-slate-700/40 bg-slate-900 overflow-hidden">
 
-      {/* ── Summary ── */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      {/* Header bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/40 bg-slate-900/60 px-4 sm:px-5 py-3">
         <h3 className="text-sm font-bold text-slate-100">Test Results</h3>
         <div className="flex flex-wrap gap-2">
           <span className="rounded-full bg-green-500/15 px-3 py-0.5 text-[11px] font-semibold uppercase text-green-400">
@@ -42,15 +42,15 @@ export default function ResultsTable({ results }: ResultsTableProps) {
         </div>
       </div>
 
-      {/* ── Progress bar ── */}
-      <div className="mb-5 flex h-1.5 overflow-hidden rounded-full bg-slate-800">
+      {/* Progress bar */}
+      <div className="mx-4 sm:mx-5 mt-3 mb-4 flex h-1.5 overflow-hidden rounded-full bg-slate-800">
         {passed  > 0 && <div className="bg-green-500 transition-all duration-700" style={{ width: `${(passed / total) * 100}%` }} />}
         {failed  > 0 && <div className="bg-red-500  transition-all duration-700" style={{ width: `${(failed / total) * 100}%` }} />}
         {skipped > 0 && <div className="bg-slate-500 transition-all duration-700" style={{ width: `${(skipped / total) * 100}%` }} />}
       </div>
 
-      {/* ── Table ── */}
-      <div className="overflow-x-auto rounded-lg border border-slate-700/40">
+      {/* Table */}
+      <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr>

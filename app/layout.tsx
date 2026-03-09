@@ -19,7 +19,7 @@ const APP_URL = 'https://scrutiny.com';
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: {
-    default: 'Scrutiny — Web QA Automation',
+    default: 'Scrutiny - Web QA Automation',
     template: '%s | Scrutiny',
   },
   description:

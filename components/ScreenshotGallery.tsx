@@ -30,13 +30,14 @@ export default function ScreenshotGallery({ screenshots }: ScreenshotGalleryProp
 
   return (
     <>
-      <div className="animate-fade-in-up rounded-xl border border-slate-700/40 bg-slate-900 p-6">
-        <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-100">
-          <Images size={15} className="text-cyan-400" />
-          Screenshots
-          <span className="font-normal text-slate-500">({files.length})</span>
-        </h3>
+      <div className="animate-fade-in-up rounded-xl border border-slate-700/40 bg-slate-900 overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-slate-700/40 bg-slate-900/60 px-4 sm:px-5 py-3">
+        <Images size={14} className="text-cyan-400 shrink-0" />
+        <h3 className="text-sm font-bold text-slate-100">Screenshots</h3>
+        <span className="text-xs font-normal text-slate-500">({files.length})</span>
+      </div>
 
+      <div className="p-4 sm:p-5">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {files.map((file) => (
             <button
@@ -58,6 +59,7 @@ export default function ScreenshotGallery({ screenshots }: ScreenshotGalleryProp
           ))}
         </div>
       </div>
+    </div>
 
       {/* ── Lightbox ── */}
       {selected && (
@@ -67,7 +69,7 @@ export default function ScreenshotGallery({ screenshots }: ScreenshotGalleryProp
         >
           <div
             className="relative flex max-h-[90vh] max-w-[90vw] flex-col items-center gap-3"
-            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            onClick={(event: React.MouseEvent) => event.stopPropagation()}
           >
             <button
               onClick={() => setSelected(null)}
