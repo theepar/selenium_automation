@@ -34,13 +34,23 @@ const STEP_DELAY = 700;
 const screenshotsDir = path.join(process.cwd(), "public", "screenshots");
 const recordingsDir = path.join(process.cwd(), "public", "recordings");
 
-if (fs.existsSync(screenshotsDir))
-  fs.rmSync(screenshotsDir, { recursive: true, force: true });
-fs.mkdirSync(screenshotsDir, { recursive: true });
+function cleanDir(dir: string) {
+  try {
+    if (fs.existsSync(dir))
+      fs.rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // Directory may be locked — clear contents instead
+    try {
+      for (const file of fs.readdirSync(dir)) {
+        try { fs.unlinkSync(path.join(dir, file)); } catch { /* skip locked files */ }
+      }
+    } catch { /* directory may not exist yet */ }
+  }
+  fs.mkdirSync(dir, { recursive: true });
+}
 
-if (fs.existsSync(recordingsDir))
-  fs.rmSync(recordingsDir, { recursive: true, force: true });
-fs.mkdirSync(recordingsDir, { recursive: true });
+cleanDir(screenshotsDir);
+cleanDir(recordingsDir);
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
@@ -81,7 +91,7 @@ async function waitForPageLoad(driver: WebDriver): Promise<void> {
         "complete"
       );
     }, WAIT_TIMEOUT)
-    .catch(() => {});
+    .catch(() => { });
   await driver.sleep(1_200);
 }
 
@@ -155,13 +165,32 @@ async function safeFill(
 function generateUniqueData() {
   const ts = Date.now();
   const rand = Math.floor(Math.random() * 9_000) + 1_000;
+
+  // Indonesian mobile prefixes (digits after +62)
+  // Telkomsel: 811-813, 821-823, 851-853  |  Indosat: 814-816, 855-858
+  // XL: 817-819, 859, 877-879  |  Tri: 895-899  |  Smartfren: 881-889
+  const prefixes = [
+    "811", "812", "813", "821", "822", "823", "851", "852", "853",
+    "814", "815", "816", "855", "856", "857", "858",
+    "817", "818", "819", "859", "877", "878", "879",
+    "895", "896", "897", "898", "899",
+    "881", "882", "883", "884", "885", "886", "887", "888", "889",
+  ];
+  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+  // Generate 7-8 random digits after the prefix (total 10-11 digits)
+  const suffixLen = Math.random() < 0.5 ? 7 : 8;
+  const suffix = Array.from({ length: suffixLen }, () =>
+    Math.floor(Math.random() * 10),
+  ).join("");
+  const phone = `${prefix}${suffix}`;
+
   return {
     name: `Test User ${ts}`,
     email: `testuser_${ts}_${rand}@testmail.dev`,
-    username: `user${ts}${rand}`,
+    username: `u${String(ts).slice(-6)}${rand}${Math.random().toString(36).slice(2, 7)}`.slice(0, 16),
     password: "TestPass123!",
     /** Digits after the +62 country prefix */
-    phone: "81234567890",
+    phone,
   };
 }
 
@@ -278,6 +307,17 @@ async function selectIndonesiaPhoneCode(
       if (selected) {
         logger("success", "   ✅ Indonesia (+62) selected successfully");
         await driver.sleep(300);
+
+        // Close the dropdown if it's still open
+        try {
+          await driver.executeScript(`
+            document.activeElement?.blur();
+            document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            document.body.click();
+          `);
+          await driver.sleep(500);
+        } catch { /* ignore */ }
+
         return true;
       }
     } catch {
@@ -537,11 +577,9 @@ async function runRegisterFlow(
   // ── Step 5 / 6 — Phone Number (Indonesia) ───────────────────────────────────
   logger("info", "📱 Step 5/6 — Phone Number (Indonesia)");
 
-  // First open the country-code dropdown and pick Indonesia
-  await selectIndonesiaPhoneCode(driver, logger);
-
   /**
-   * 🔧 ADJUST SELECTOR — Phone number input (digits only, without country code).
+   * Skip country-code dropdown — just select all existing content in the
+   * phone input and overwrite with the full +62 number directly.
    */
   const phoneSelectors = [
     'input[name="phone"]',
@@ -556,18 +594,31 @@ async function runRegisterFlow(
     'input[placeholder*="handphone" i]',
     'input[placeholder*="whatsapp" i]',
   ];
+  const fullPhone = `+62${data.phone}`;
   try {
     const el = await findElement(driver, phoneSelectors, "Phone");
     await driver.wait(until.elementIsVisible(el), WAIT_TIMEOUT);
-    await safeFill(driver, el, data.phone);
+    await safeClick(driver, el);
+    await driver.sleep(300);
+    // Select all (Ctrl+A) then type the full number to overwrite
+    const { Key } = await import("selenium-webdriver");
+    await el.sendKeys(Key.chord(Key.CONTROL, "a"));
+    await driver.sleep(100);
+    await el.sendKeys(fullPhone);
+    // Trigger React change events
+    await driver.executeScript(
+      `arguments[0].dispatchEvent(new Event('input',  { bubbles: true }));
+       arguments[0].dispatchEvent(new Event('change', { bubbles: true }));`,
+      el,
+    );
     await driver.sleep(STEP_DELAY);
     results.push({
       type: "input[tel]",
       element: "phone",
       status: "pass",
-      action: `filled: "+62${data.phone}"`,
+      action: `filled: "${fullPhone}"`,
     });
-    logger("success", `   ✅ Phone filled: +62${data.phone}`);
+    logger("success", `   ✅ Phone filled: ${fullPhone}`);
   } catch (e) {
     results.push({
       type: "input[tel]",
@@ -1441,7 +1492,7 @@ export async function runAutomation(
           url,
           { email: credentials.email, password: credentials.password },
           postContent?.trim() ||
-            "Test post from NexusAuto QA Platform 🤖 #automation #testing",
+          "Test post from NexusAuto QA Platform 🤖 #automation #testing",
           logger,
           screenshots,
           sessionId,
@@ -1468,8 +1519,8 @@ export async function runAutomation(
     logger(
       "done",
       `🎉 ${flow.toUpperCase()} done! ` +
-        `✅ ${summary.passed} passed · ❌ ${summary.failed} failed · ` +
-        `Assertion: ${assertionPassed ? "✅ PASSED" : "❌ FAILED"}`,
+      `✅ ${summary.passed} passed · ❌ ${summary.failed} failed · ` +
+      `Assertion: ${assertionPassed ? "✅ PASSED" : "❌ FAILED"}`,
     );
 
     logger("info", "⏹️  Stopping recording & saving video…");
@@ -1482,7 +1533,7 @@ export async function runAutomation(
       "error",
       `💥 Fatal error: ${err instanceof Error ? err.message : String(err)}`,
     );
-    await recorder.stop().catch(() => {});
+    await recorder.stop().catch(() => { });
     throw err;
   } finally {
     await driver.quit();
