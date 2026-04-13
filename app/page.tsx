@@ -6,9 +6,8 @@ import {
   Play,
   Square,
   RotateCcw,
-  LogIn,
+  Briefcase,
   UserPlus,
-  MessageSquarePlus,
   Video,
   Sparkles,
   CheckCircle2,
@@ -39,14 +38,14 @@ interface FlowOption {
 
 const FLOWS: FlowOption[] = [
   {
-    id: "login",
-    label: "Login Flow",
-    description: "Otomasi sign-in dengan email & password yang Anda berikan.",
-    icon: <LogIn size={20} />,
-    selectedCard: "border-indigo-500 bg-indigo-500/10",
-    selectedIcon: "text-indigo-400",
-    selectedDot: "bg-indigo-500",
-    hoverBorder: "hover:border-indigo-500/40",
+    id: "jobVacancy",
+    label: "Job Vacancy Flow",
+    description: "Mensimulasikan flow pencarian kerja: membuka lowongan pekerjaan, mencari posisi, dan melihat detail pekerjaan.",
+    icon: <Briefcase size={20} />,
+    selectedCard: "border-blue-500 bg-blue-500/10",
+    selectedIcon: "text-blue-400",
+    selectedDot: "bg-blue-500",
+    hoverBorder: "hover:border-blue-500/40",
   },
   {
     id: "register",
@@ -60,14 +59,14 @@ const FLOWS: FlowOption[] = [
     hoverBorder: "hover:border-emerald-500/40",
   },
   {
-    id: "postFeed",
-    label: "Post Feed Flow",
-    description: "Login lalu buat postingan baru di feed secara otomatis.",
-    icon: <MessageSquarePlus size={20} />,
-    selectedCard: "border-violet-500 bg-violet-500/10",
-    selectedIcon: "text-violet-400",
-    selectedDot: "bg-violet-500",
-    hoverBorder: "hover:border-violet-500/40",
+    id: "applyClass",
+    label: "Apply Class Flow",
+    description: "Membuka halaman Community, memilih kelas teratas, dan memproses pendaftaran otomatis.",
+    icon: <UserPlus size={20} />,
+    selectedCard: "border-purple-500 bg-purple-500/10",
+    selectedIcon: "text-purple-400",
+    selectedDot: "bg-purple-500",
+    hoverBorder: "hover:border-purple-500/40",
   },
 ];
 
@@ -78,9 +77,9 @@ export default function HomePage() {
 
   /** Only the pathname portion for each flow */
   const FLOW_PATHS: Record<FlowType, string> = {
-    login: "/app/login",
     register: "/app/register",
-    postFeed: "/app/login",
+    applyClass: "/app/learning/community",
+    jobVacancy: "/app/growth/job-vacancy",
   };
 
   const [targetUrl, setTargetUrl] = useState(DEFAULT_BASE + "/");
@@ -120,9 +119,8 @@ export default function HomePage() {
   const isError = runState === "error";
   const hasLogs = logs.length > 0 || isRunning;
 
-  const needsCredentials =
-    selectedFlow === "login" || selectedFlow === "postFeed";
-  const needsPostContent = selectedFlow === "postFeed";
+  const needsCredentials = false;
+  const needsPostContent = false; // changed from selectedFlow === "applyClass";
 
   const canRun =
     !!targetUrl.trim() &&
@@ -146,7 +144,6 @@ export default function HomePage() {
         body: JSON.stringify({
           url: targetUrl.trim(),
           flow: selectedFlow,
-          credentials: { email: email.trim(), password: password.trim() },
           postContent: postContent.trim(),
         }),
       });
@@ -326,7 +323,7 @@ export default function HomePage() {
             )}
 
             {/* ── Dynamic fields ─────────────────────────────────────────── */}
-            {!hasLogs && selectedFlow && (
+            {!hasLogs && selectedFlow && (selectedFlow === "register" || needsCredentials || needsPostContent) && (
               <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 space-y-3">
                 {/* Register — info only, no manual input */}
                 {selectedFlow === "register" && (
@@ -458,12 +455,12 @@ export default function HomePage() {
                   className="flex-1 flex items-center justify-center gap-2 min-h-[48px] rounded-xl bg-linear-to-r from-indigo-600 to-indigo-500 px-7 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-indigo-500/40 active:translate-y-0 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                 >
                   <Play size={14} />
-                  {selectedFlow === "login"
-                    ? "Run Login Test"
+                  {selectedFlow === "jobVacancy"
+                    ? "Run Job Vacancy Test"
                     : selectedFlow === "register"
                       ? "Run Register Test"
-                      : selectedFlow === "postFeed"
-                        ? "Run Post Feed Test"
+                      : selectedFlow === "applyClass"
+                        ? "Run Apply Class Test"
                         : "Run Test"}
                 </button>
               )}
@@ -501,11 +498,11 @@ export default function HomePage() {
                     <>
                       Running&nbsp;
                       <span className="font-semibold text-slate-200">
-                        {selectedFlow === "login"
-                          ? "Login Flow"
+                        {selectedFlow === "jobVacancy"
+                          ? "Job Vacancy Flow"
                           : selectedFlow === "register"
                             ? "Register Flow"
-                            : "Post Feed Flow"}
+                            : "Apply Class Flow"}
                       </span>
                       …
                     </>

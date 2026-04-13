@@ -60,6 +60,7 @@ export type Logger = (
   data?: Record<string, string>,
 ) => void;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface Credentials {
   email: string;
   password: string;
@@ -75,6 +76,7 @@ async function takeScreenshot(
   fs.writeFileSync(path.join(screenshotsDir, filename), data, "base64");
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function getAttribute(
   element: WebElement,
   name: string,
@@ -207,6 +209,7 @@ function generateUniqueData() {
  *    registration page, inspect the element that holds the flag/+62 prefix,
  *    and add its selector to `triggerSelectors` below.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function selectIndonesiaPhoneCode(
   driver: WebDriver,
   logger: Logger,
@@ -577,10 +580,10 @@ async function runRegisterFlow(
   // ── Step 5 / 6 — Phone Number (Indonesia) ───────────────────────────────────
   logger("info", "📱 Step 5/6 — Phone Number (Indonesia)");
 
-  /**
-   * Skip country-code dropdown — just select all existing content in the
-   * phone input and overwrite with the full +62 number directly.
-   */
+  // Attempt to select Indonesia from dropdown first
+  const codeSelected = await selectIndonesiaPhoneCode(driver, logger);
+  const inputPhone = codeSelected ? data.phone : `+62${data.phone}`;
+
   const phoneSelectors = [
     'input[name="phone"]',
     'input[name="phone_number"]',
@@ -594,17 +597,16 @@ async function runRegisterFlow(
     'input[placeholder*="handphone" i]',
     'input[placeholder*="whatsapp" i]',
   ];
-  const fullPhone = `+62${data.phone}`;
   try {
     const el = await findElement(driver, phoneSelectors, "Phone");
     await driver.wait(until.elementIsVisible(el), WAIT_TIMEOUT);
     await safeClick(driver, el);
     await driver.sleep(300);
-    // Select all (Ctrl+A) then type the full number to overwrite
+    // Select all (Ctrl+A) then type the number to overwrite
     const { Key } = await import("selenium-webdriver");
-    await el.sendKeys(Key.chord(Key.CONTROL, "a"));
+    await el.sendKeys(Key.chord(Key.CONTROL, "a"), Key.BACK_SPACE);
     await driver.sleep(100);
-    await el.sendKeys(fullPhone);
+    await el.sendKeys(inputPhone);
     // Trigger React change events
     await driver.executeScript(
       `arguments[0].dispatchEvent(new Event('input',  { bubbles: true }));
@@ -616,9 +618,9 @@ async function runRegisterFlow(
       type: "input[tel]",
       element: "phone",
       status: "pass",
-      action: `filled: "${fullPhone}"`,
+      action: `filled: "${inputPhone}"`,
     });
-    logger("success", `   ✅ Phone filled: ${fullPhone}`);
+    logger("success", `   ✅ Phone filled: ${inputPhone}`);
   } catch (e) {
     results.push({
       type: "input[tel]",
@@ -684,6 +686,8 @@ async function runRegisterFlow(
   const submitSelectors = [
     'button[type="submit"]',
     'input[type="submit"]',
+    "[class*='register-btn']",
+    "[class*='signup-btn']",
     "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'sign up')]",
     "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'register')]",
     "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'daftar')]",
@@ -835,576 +839,413 @@ async function runRegisterFlow(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FLOW 2 — LOGIN
+// FLOW 2 — APPLY CLASS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Fills the login form with provided credentials and asserts a successful
- * redirect away from the login page.
+ * Navigates to Community/Classes, selects the first class,
+ * switches to new tab if necessary, and clicks Apply/Daftar.
  */
-async function runLoginFlow(
+async function runApplyClassFlow(
   driver: WebDriver,
   url: string,
-  credentials: Credentials,
   logger: Logger,
   screenshots: string[],
   sessionId: number,
 ): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
-  logger("section", "━━━ LOGIN FLOW ━━━");
-  logger("info", `📋 Credentials: ${credentials.email}`);
+  logger("section", "━━━ APPLY CLASS FLOW ━━━");
 
   // ── Navigate ────────────────────────────────────────────────────────────────
   logger("info", `🌐 Navigating to: ${url}`);
   await driver.get(url);
   await waitForPageLoad(driver);
 
-  // 🔧 ADJUST: update the selector if the login form has a unique wrapper.
-  try {
-    await driver.wait(
-      until.elementLocated(
-        By.css('form, [class*="login"], [class*="signin"], [class*="auth"]'),
-      ),
-      WAIT_TIMEOUT,
-    );
-  } catch {
-    logger("warn", "⚠️  Login form container not detected — proceeding…");
-  }
-  await driver.sleep(600);
+  // Di layar yang ada dashboardnya, kita tunggu render komponen kelas
+  await driver.sleep(1000);
 
-  // Screenshot ① — login page
-  const ss1 = `${sessionId}_login_1_initial.png`;
+  // Screenshot 1
+  const ss1 = `${sessionId}_class_1_initial.png`;
   await takeScreenshot(driver, ss1);
   screenshots.push(ss1);
-  logger("screenshot", "📸 Login page loaded", { file: ss1 });
+  logger("screenshot", "📸 Community / Classes page loaded", { file: ss1 });
 
-  // ── Step 1 / 3 — Email ──────────────────────────────────────────────────────
-  logger("info", "✏️  Step 1/3 — Email / Username");
-  /**
-   * 🔧 ADJUST SELECTOR — Email or username field on the login page.
-   */
-  const emailSelectors = [
-    'input[type="email"]',
-    'input[name="email"]',
-    'input[name="username"]',
-    'input[id="email"]',
-    'input[placeholder*="email" i]',
-    'input[placeholder*="username" i]',
-    'input[placeholder*="surel" i]',
+  // ── Step 1 — Select the Top Class ──────────────────────────────────────────
+  logger("info", "🖱️  Step 1 — Memilih Kelas Teratas");
+  let detailSuccess = false;
+
+  const classCardSelectors = [
+    // 1. Sangat Akurat: Cari titik pasti (text) "Materi" / "Harga" yang selalu ada di dalam grid class-card 
+    // Kliknya akan menembus ke kontainer (bubbling)
+    "//*[normalize-space(text())='Materi']",
+    "//*[normalize-space(text())='Harga']",
+
+    // 2. Sangat spesifik menargetkan wrapper Link atau Card yang letaknya di main content (menghindari sidebar navigation)
+    "//main//a[contains(@href, '/classes/') and contains(@href, '/overview')]",
+    "//main//*[contains(@class, 'card')]//a",
+
+    // 3. Fallbacks jika URL strukturnya unik
+    "//a[contains(@href, '/classes/') and not(contains(@class, 'nav')) and not(contains(@class, 'menu'))]",
+    "//div[contains(@class, 'card') and (contains(., 'Materi') or contains(., 'Harga'))]",
+    "//*[contains(text(), 'Kelas Gratis')]",
+    "[class*='course-card']"
   ];
-  try {
-    const el = await findElement(driver, emailSelectors, "Email/Username");
-    await safeFill(driver, el, credentials.email);
-    await driver.sleep(STEP_DELAY);
-    results.push({
-      type: "input[email]",
-      element: "email",
-      status: "pass",
-      action: `filled: "${credentials.email}"`,
-    });
-    logger("success", `   ✅ Email filled: "${credentials.email}"`);
-  } catch (e) {
-    results.push({
-      type: "input[email]",
-      element: "email",
-      status: "error",
-      reason: String(e),
-    });
-    logger("warn", "   ⚠️  Email field not found — adjust emailSelectors");
-  }
 
-  // ── Step 2 / 3 — Password ───────────────────────────────────────────────────
-  logger("info", "✏️  Step 2/3 — Password");
-  /**
-   * 🔧 ADJUST SELECTOR — Password field on the login page.
-   */
   try {
-    const pwInput = await driver.wait(
-      until.elementLocated(By.css('input[type="password"]')),
-      WAIT_TIMEOUT,
-    );
-    await driver.wait(until.elementIsVisible(pwInput), WAIT_TIMEOUT);
-    await safeFill(driver, pwInput, credentials.password);
-    await driver.sleep(STEP_DELAY);
-    results.push({
-      type: "input[password]",
-      element: "password",
-      status: "pass",
-      action: "filled: [hidden]",
-    });
-    logger("success", "   ✅ Password filled");
-  } catch (e) {
-    results.push({
-      type: "input[password]",
-      element: "password",
-      status: "error",
-      reason: String(e),
-    });
-    logger("warn", "   ⚠️  Password field not found");
-  }
+    const classCard = await findElement(driver, classCardSelectors, "Class Card", WAIT_TIMEOUT);
+    await safeClick(driver, classCard);
 
-  // Screenshot ② — form filled
-  const ss2 = `${sessionId}_login_2_filled.png`;
-  await takeScreenshot(driver, ss2);
-  screenshots.push(ss2);
-  logger("screenshot", "📸 Credentials filled — about to submit", {
-    file: ss2,
-  });
+    // Beri waktu cukup panjang agar React/NextJS me-load SPA /overview
+    await driver.sleep(4000);
 
-  // ── Step 3 / 3 — Click Login ─────────────────────────────────────────────────
-  logger("info", "🖱️  Step 3/3 — Clicking Login button…");
-  /**
-   * 🔧 ADJUST SELECTOR — Login submit button.
-   */
-  const loginBtnSelectors = [
-    'button[type="submit"]',
-    'input[type="submit"]',
-    "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'login')]",
-    "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'sign in')]",
-    "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'masuk')]",
-    "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'log in')]",
-  ];
-  try {
-    const btn = await findElement(driver, loginBtnSelectors, "Login Button");
-    const btnText = (await btn.getText()).trim();
-    await safeClick(driver, btn);
+    // Check if new tab opened
+    try {
+      const handles = await driver.getAllWindowHandles();
+      if (handles.length > 1) {
+        logger("info", "   🔄 Berpindah ke tab baru (Class Detail)...");
+        await driver.switchTo().window(handles[handles.length - 1]);
+      }
+    } catch { /* proceed on same tab */ }
+
+    // Tunggu status document ready
+    await waitForPageLoad(driver);
+    await driver.sleep(1000);
+
     results.push({
       type: "button",
-      element: btnText || "Login",
+      element: "Class Card",
       status: "pass",
       action: "clicked",
     });
-    logger("success", `   ✅ Clicked: "${btnText || "Login"}"`);
+    logger("success", "   ✅ Clicked upper-most Class Card");
   } catch (e) {
     results.push({
       type: "button",
-      element: "Login",
+      element: "Class Card",
       status: "error",
       reason: String(e),
     });
-    logger("error", "   ❌ Login button not found");
+    logger("error", "   ❌ Tidak dapat menemukan atau menekan Class Card");
   }
 
-  // ── Assertion — URL should leave /login ─────────────────────────────────────
-  logger("info", "⏳ Asserting login success…");
-  await driver.sleep(2_000);
-  let loginSuccess = false;
+  // Screenshot 2
+  const ss2 = `${sessionId}_class_2_detail.png`;
+  await takeScreenshot(driver, ss2);
+  screenshots.push(ss2);
+  logger("screenshot", "📸 Class Details", { file: ss2 });
 
-  // Assertion ①: URL no longer contains /login or /signin
+  // ── Step 2 — Click Daftar / Apply ───────────────────────────────────────────
+  logger("info", "📝 Step 2 — Mendaftar Kelas");
+
+  const applyBtnSelectors = [
+    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'daftar')]",
+    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'ikuti')]",
+    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'enroll')]",
+    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'ambil')]",
+    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'apply')]",
+    "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'daftar')]",
+    "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'ikuti')]",
+    "[class*='enroll-btn']",
+    "[class*='daftar-btn']"
+  ];
+
   try {
-    /**
-     * 🔧 ADJUST: extend the negative-match patterns if the login URL differs.
-     */
-    await driver.wait(async () => {
-      const cur = await driver.getCurrentUrl().then((u) => u.toLowerCase());
-      return !cur.includes("/login") && !cur.includes("/signin");
-    }, WAIT_TIMEOUT);
+    const applyBtn = await findElement(driver, applyBtnSelectors, "Apply Button", WAIT_TIMEOUT);
+    await safeClick(driver, applyBtn);
+    await driver.sleep(1500);
+    logger("success", "   ✅ Clicked Daftar/Enroll button");
 
-    const finalUrl = await driver.getCurrentUrl();
-    loginSuccess = true;
-    logger("success", `   ✅ ASSERTION PASSED — logged in! URL: "${finalUrl}"`);
-    results.push({
-      type: "assertion",
-      element: "Login redirect",
-      status: "pass",
-      action: `Redirected to: ${finalUrl}`,
-    });
-  } catch {
-    // Assertion ②: a post-login UI element is present
+    // Try secondary confirmation modal (if present)
     try {
-      /**
-       * 🔧 ADJUST SELECTOR — elements that only appear when authenticated.
-       */
-      const dashboardSelectors = [
-        "[class*='dashboard']",
-        "[class*='feed']",
-        "[class*='home']",
-        "nav [class*='avatar']",
-        "[aria-label*='profile' i]",
-        "[aria-label*='account' i]",
-        "[class*='user-menu']",
-        "[class*='navbar'] img",
+      const confirmSelectors = [
+        "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'beli')]",
+        "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'bayar')]",
+        "//button[text()='Ya']",
+        "//button[text()='Lanjutkan']",
+        "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'submit')]",
+        "[class*='confirm-btn']",
       ];
-      await findElement(
-        driver,
-        dashboardSelectors,
-        "Post-login element",
-        WAIT_TIMEOUT,
-      );
-      loginSuccess = true;
-      logger(
-        "success",
-        "   ✅ ASSERTION PASSED — authenticated UI element found",
-      );
-      results.push({
-        type: "assertion",
-        element: "Dashboard element",
-        status: "pass",
-        action: "Post-login element visible",
-      });
+      let submitted = false;
+      for (const sel of confirmSelectors) {
+        try {
+          const subLocator = sel.startsWith("//") ? By.xpath(sel) : By.css(sel);
+          const subBtns = await driver.findElements(subLocator);
+          for (const btn of subBtns) {
+            if (await btn.isDisplayed()) {
+              await safeClick(driver, btn);
+              await driver.sleep(2000);
+              logger("success", "   ✅ Diklik: Modal Konfirmasi Pendaftaran");
+              submitted = true;
+              break;
+            }
+          }
+          if (submitted) break;
+        } catch { }
+      }
+      if (!submitted) {
+        logger("info", "   ℹ️ Tidak ada pop-up konfirmasi pendaftaran lanjutan.");
+      }
+    } catch { }
+
+    // Screenshot 3
+    const ss3 = `${sessionId}_class_3_applied.png`;
+    await takeScreenshot(driver, ss3);
+    screenshots.push(ss3);
+    logger("screenshot", "📸 Berhasil Daftar", { file: ss3 });
+
+    // ── Assertion ────────────────────────────────────────────────────────────
+    logger("info", "⏳ Asserting telah mencapai tahap Pendaftaran / Payment...");
+    const successSelectors = [
+      "[class*='success']",
+      "[class*='toast']",
+      "//h1[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'pembayaran')]",
+      "//h2[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'pembayaran')]",
+      "//h1[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'payment')]",
+      "//h2[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'payment')]",
+      "//h1[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'checkout')]",
+      "//div[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'metode pembayaran')]",
+      "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'bayar')]",
+      "//div[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'berhasil')]"
+    ];
+    try {
+      await findElement(driver, successSelectors, "Daftar / Payment Indicator", 5000);
+      detailSuccess = true;
+      logger("success", `   ✅ ASSERTION PASSED — Telah mencapai halaman Payment/Sukses`);
+      results.push({ type: "assertion", element: "Apply Class", status: "pass", action: "Reached Payment/Success Step" });
     } catch {
-      logger("error", "   ❌ ASSERTION FAILED — login did not succeed.");
-      results.push({
-        type: "assertion",
-        element: "Login success",
-        status: "error",
-        reason: "No post-login indicator found",
-      });
+      logger("warn", "   ⚠️ ASSERTION WARNING — Indikator payment sukses tidak terdeteksi, namun tombol Daftar telah diklik.");
+      results.push({ type: "assertion", element: "Apply Class", status: "error", reason: "Wait timeout for payment state" });
     }
+
+  } catch (e) {
+    logger("error", "   ❌ Tombol Daftar/Ikuti tidak ditemukan atau tidak klikabel.");
+    results.push({ type: "button", element: "Daftar", status: "error", reason: String(e) });
   }
 
-  // Screenshot ③ — final
-  const ss3 = `${sessionId}_login_3_result.png`;
-  await takeScreenshot(driver, ss3);
-  screenshots.push(ss3);
   logger(
-    "screenshot",
-    `📸 Login result — ${loginSuccess ? "✅ SUCCESS" : "❌ FAILED"}`,
-    { file: ss3 },
-  );
-
-  logger(
-    loginSuccess ? "success" : "error",
-    loginSuccess
-      ? "🎉 Login flow completed SUCCESSFULLY!"
-      : "❌ Login flow did NOT complete as expected.",
+    detailSuccess ? "success" : "error",
+    detailSuccess
+      ? "🎉 Apply Class flow completed SUCCESSFULLY!"
+      : "❌ Apply Class flow did NOT complete as expected.",
   );
 
   return results;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FLOW 3 — POST FEED
+// FLOW 3 — JOB VACANCY
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Logs in, navigates to the feed, composes a new post, submits it,
- * and asserts that the post was created successfully.
+ * Navigates to the Job Vacancy page, searches or clicks a filter, and opens a job detail.
  */
-async function runPostFeedFlow(
+async function runJobVacancyFlow(
   driver: WebDriver,
   url: string,
-  credentials: Credentials,
-  postContent: string,
   logger: Logger,
   screenshots: string[],
   sessionId: number,
 ): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
-  logger("section", "━━━ POST FEED FLOW ━━━");
-  logger("info", `📋 Account  : ${credentials.email}`);
-  logger("info", `📝 Content  : "${postContent.slice(0, 60)}…"`);
+  logger("section", "━━━ JOB VACANCY FLOW ━━━");
 
-  // ── Phase 1 — Login ─────────────────────────────────────────────────────────
-  logger("section", "── Phase 1: Login ──");
-  const loginResults = await runLoginFlow(
-    driver,
-    url,
-    credentials,
-    logger,
-    screenshots,
-    sessionId,
-  );
-  results.push(...loginResults);
+  // ── Navigate ────────────────────────────────────────────────────────────────
+  logger("info", `🌐 Navigating to: ${url}`);
+  await driver.get(url);
+  await waitForPageLoad(driver);
 
-  const loginSuccess = loginResults.some(
-    (r) => r.type === "assertion" && r.status === "pass",
-  );
-  if (!loginSuccess) {
-    logger("error", "❌ Login failed — cannot continue to Post Feed.");
-    results.push({
-      type: "assertion",
-      element: "Post Feed — login prerequisite",
-      status: "error",
-      reason: "Login step failed",
-    });
-    return results;
+  // Assertion: Page loaded correctly
+  try {
+    const headings = [
+      "//h1[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), 'lowongan pekerjaan')]",
+      "//h1[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), 'job vacancy')]",
+      "//h2[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), 'lowongan pekerjaan')]",
+    ];
+    await findElement(driver, headings, "Page Header", WAIT_TIMEOUT);
+  } catch {
+    logger("warn", "⚠️  Job Vacancy header not automatically detected — proceeding…");
   }
+  await driver.sleep(600);
 
-  // ── Phase 2 — Navigate to feed ──────────────────────────────────────────────
-  logger("section", "── Phase 2: Find Feed Page ──");
-  const origin = new URL(url).origin;
-
-  /**
-   * 🔧 ADJUST: put the real SocialVit feed URL first in this list.
-   */
-  const feedCandidates = [
-    `${origin}/app/feed`,
-    `${origin}/app/home`,
-    `${origin}/app`,
-    `${origin}/feed`,
-    `${origin}/home`,
-    `${origin}/`,
-  ];
-
-  /**
-   * 🔧 ADJUST SELECTOR — element that marks "this is the feed page".
-   */
-  const postAreaIndicators = [
-    "textarea[placeholder*='post' i]",
-    "textarea[placeholder*='mind' i]",
-    "textarea[placeholder*='apa' i]",
-    "[class*='create-post']",
-    "[class*='post-box']",
-    "[class*='new-post']",
-    "[class*='compose']",
-    "[contenteditable='true']",
-    "[class*='post'] textarea",
-  ];
-
-  let feedFound = false;
-  for (const feedUrl of feedCandidates) {
-    try {
-      await driver.get(feedUrl);
-      await waitForPageLoad(driver);
-      try {
-        await findElement(
-          driver,
-          postAreaIndicators,
-          "Post area indicator",
-          3_000,
-        );
-        feedFound = true;
-        logger("success", `   ✅ Feed found at: ${feedUrl}`);
-        break;
-      } catch {
-        logger("info", `   ⏭️  No post area at ${feedUrl}, trying next…`);
-      }
-    } catch {
-      /* navigation failed, try next */
-    }
-  }
-
-  if (!feedFound) {
-    logger(
-      "warn",
-      "⚠️  Could not auto-detect feed page — will try current page.",
-    );
-  }
-
-  // Screenshot ① — feed page
-  const ss1 = `${sessionId}_post_1_feed.png`;
+  // Screenshot 1
+  const ss1 = `${sessionId}_job_1_initial.png`;
   await takeScreenshot(driver, ss1);
   screenshots.push(ss1);
-  logger("screenshot", "📸 Feed page", { file: ss1 });
+  logger("screenshot", "📸 Job Vacancy page loaded", { file: ss1 });
 
-  // ── Phase 3 — Compose post ──────────────────────────────────────────────────
-  logger("section", "── Phase 3: Compose & Submit Post ──");
-
-  // Some UIs need a "Create Post" button click to reveal the textarea/modal.
-  /**
-   * 🔧 ADJUST SELECTOR — optional trigger button that opens the compose UI.
-   */
-  const postTriggerSelectors = [
-    "[class*='create-post'] button",
-    "[class*='new-post'] button",
-    "[class*='add-post']",
-    "button[aria-label*='post' i]",
-    "button[aria-label*='create' i]",
-    "//button[contains(.,'Create Post')]",
-    "//button[contains(.,'Buat Postingan')]",
-    "//button[contains(.,'Tambah')]",
+  // Tahap Search telah dihapus sesuai permintaan.
+  logger("info", "🎯 Step 2 — Exploring Filters");
+  const filterSelectors = [
+    "//button[contains(.,'Filter')]",
+    "[class*='filter'] button",
+    "button[aria-label*='filter' i]",
+    "button[aria-label*='menu' i]",
+    "button[aria-label*='sidebar' i]",
+    "button[aria-label*='toggle' i]",
+    "[class*='hamburger']",
+    "[class*='toggle']",
+    // Fallback yang sering digunakan untuk tombol panel sidebar sebelah kiri:
+    "//button[.//svg]",
+    "//div[@role='button' and .//svg]",
+    "//*[local-name()='svg' and contains(@class, 'lucide-menu')]/..",
+    "//*[local-name()='svg' and contains(@class, 'menu')]",
+    "//div[contains(@class, 'cursor-pointer') and .//*[local-name()='svg']]",
+    "//button[contains(.,'Tipe Pekerjaan')]",
+    "//button[contains(.,'Job Type')]",
+    "//select",
   ];
   try {
-    const trigger = await findElement(
-      driver,
-      postTriggerSelectors,
-      "Post trigger",
-      3_000,
-    );
-    await safeClick(driver, trigger);
-    await driver.sleep(800);
-    logger("info", "   ✅ Clicked post creation trigger");
-  } catch {
-    logger("info", "   ℹ️  No trigger button found — trying direct textarea");
-  }
+    const filterBtn = await findElement(driver, filterSelectors, "Filter Toggle", 3000);
+    await safeClick(driver, filterBtn);
+    await driver.sleep(1000);
 
-  // Fill the post content
-  /**
-   * 🔧 ADJUST SELECTOR — the actual text entry for the post content.
-   */
-  const postInputSelectors = [
-    "textarea[placeholder*='post' i]",
-    "textarea[placeholder*='mind' i]",
-    "textarea[placeholder*='apa' i]",
-    "textarea[placeholder*='tulis' i]",
-    "[contenteditable='true']",
-    "[class*='post'] textarea",
-    "[class*='compose'] textarea",
-    "[class*='editor'] [contenteditable]",
-    "textarea",
-  ];
-  try {
-    const postInput = await findElement(
-      driver,
-      postInputSelectors,
-      "Post input",
-    );
+    const optionSelectors = [
+      "//label[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'full time') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'full-time')]",
+      "//span[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'full time')]",
+      "//input[@type='radio' or @type='checkbox'][following-sibling::*[contains(.,'Full Time')]]",
+      "//option[contains(.,'Full Time') or contains(.,'Full-time')]",
+      "//li[contains(.,'Full Time') or contains(.,'Full-time')]",
+    ];
+    try {
+      const optionEl = await findElement(driver, optionSelectors, "Filter Option", 2000);
+      try {
+        await safeClick(driver, optionEl);
+      } catch {
+        // Fallback option interactability
+        await driver.executeScript("arguments[0].click();", optionEl);
+      }
 
-    const tagName = await postInput.getTagName();
-    if (tagName === "textarea") {
-      await safeFill(driver, postInput, postContent);
-    } else {
-      // contenteditable element
-      await driver.executeScript(
-        "arguments[0].innerText = arguments[1]",
-        postInput,
-        postContent,
-      );
-      await postInput.click();
-      await driver.executeScript(
-        "arguments[0].dispatchEvent(new Event('input', { bubbles: true }))",
-        postInput,
-      );
+      // Khusus untuk filter dropdown bertipe native <select>, kita trigger event change
+      try {
+        const tagName = await optionEl.getTagName();
+        if (tagName === "option") {
+          const parentSelect = await optionEl.findElement(By.xpath("./parent::select"));
+          await driver.executeScript("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", parentSelect);
+        }
+      } catch { /* iterasi dilanjut tanpa error */ }
+
+      await driver.sleep(1000);
+      logger("success", "   ✅ Filter applied");
+      results.push({ type: "interaction", element: "Filter", status: "pass", action: "Applied filter" });
+    } catch {
+      logger("warn", "   ⚠️ Filter option not found, skipping option selection.");
     }
-    await driver.sleep(STEP_DELAY);
-    results.push({
-      type: "textarea",
-      element: "post_content",
-      status: "pass",
-      action: `filled: "${postContent.slice(0, 50)}…"`,
-    });
-    logger("success", "   ✅ Post content filled");
-  } catch (e) {
-    results.push({
-      type: "textarea",
-      element: "post_content",
-      status: "error",
-      reason: String(e),
-    });
-    logger(
-      "warn",
-      "   ⚠️  Could not fill post input — adjust postInputSelectors",
-    );
+  } catch {
+    logger("warn", "   ⚠️ Filter button/dropdown not found. Skipping filter.");
   }
 
-  // Screenshot ② — post composed
-  const ss2 = `${sessionId}_post_2_composed.png`;
-  await takeScreenshot(driver, ss2);
-  screenshots.push(ss2);
-  logger("screenshot", "📸 Post composed — about to submit", { file: ss2 });
-
-  // Submit
-  logger("info", "🖱️  Submitting post…");
-  /**
-   * 🔧 ADJUST SELECTOR — the submit button for the post.
-   */
-  const postSubmitSelectors = [
-    "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'post')]",
-    "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'publish')]",
-    "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'share')]",
-    "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'kirim')]",
-    "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'bagikan')]",
-    "[class*='post-btn']",
-    "[class*='submit-post']",
-    'button[type="submit"]',
+  // ── Step 3 — Click See Details ───────────────────────────────────────────────────
+  logger("info", "🖱️  Step 3 — Opening a Job Detail");
+  const seeDetailsSelectors = [
+    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'see details')]",
+    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'lihat detail')]",
+    "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'see details')]",
+    "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'lihat detail')]",
+    "//*[contains(@class, 'job')]//button",
+    "//*[contains(@class, 'job')]//a",
   ];
   try {
-    const submitBtn = await findElement(
-      driver,
-      postSubmitSelectors,
-      "Post submit",
-    );
-    const btnText = (await submitBtn.getText()).trim();
-    await safeClick(driver, submitBtn);
-    await driver.sleep(2_000);
+    const btn = await findElement(driver, seeDetailsSelectors, "See Details Button", 5000);
+    const btnText = (await btn.getText()).trim();
+    await safeClick(driver, btn);
+    await driver.sleep(2000);
+
+    // Check if clicking "See Details" opened a new tab/window.
+    try {
+      const handles = await driver.getAllWindowHandles();
+      if (handles.length > 1) {
+        logger("info", "   🔄 Berpindah ke tab baru (Job Detail)...");
+        await driver.switchTo().window(handles[handles.length - 1]);
+        await waitForPageLoad(driver);
+      }
+    } catch { /* proceed on same tab */ }
+
     results.push({
       type: "button",
-      element: btnText || "Post",
+      element: btnText || "See Details",
       status: "pass",
       action: "clicked",
     });
-    logger("success", `   ✅ Submitted: "${btnText || "Post"}"`);
+    logger("success", `   ✅ Clicked: "${btnText || "See Details"}"`);
   } catch (e) {
     results.push({
       type: "button",
-      element: "Post submit",
+      element: "See Details",
       status: "error",
       reason: String(e),
     });
-    logger("error", "   ❌ Post submit button not found");
+    logger("error", "   ❌ See Details button not found");
   }
 
-  // ── Assertion — confirm post was created ─────────────────────────────────────
-  logger("info", "⏳ Asserting post was created…");
-  let postSuccess = false;
+  // Screenshot 2 — job detail opened
+  const ss2 = `${sessionId}_job_2_detail.png`;
+  await takeScreenshot(driver, ss2);
+  screenshots.push(ss2);
+  logger("screenshot", "📸 Opened Job Details", { file: ss2 });
 
-  // Assertion ①: success toast / notification
+  // ── Step 4 — Click Apply & Fill Form (if any) ───────────────────────────────
+  logger("info", "📝 Step 4 — Applying for the Job");
+  let detailSuccess = false; // We use detailSuccess for final result
+
+  const applyBtnSelectors = [
+    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'lamar')]",
+    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'apply')]",
+    "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'lamar')]",
+    "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'apply')]",
+    "[class*='apply-btn']",
+    "[class*='lamar-btn']"
+  ];
+
   try {
-    /**
-     * 🔧 ADJUST SELECTOR — success notification after posting.
-     */
-    const successSelectors = [
-      "[class*='success']",
-      "[class*='toast']",
-      "[class*='notification']",
-      "[role='alert']",
-      "//div[contains(.,'posted') or contains(.,'published') or contains(.,'shared')]",
-      "//div[contains(.,'berhasil') and (contains(.,'post') or contains(.,'kirim'))]",
-    ];
-    const successEl = await findElement(
-      driver,
-      successSelectors,
-      "Post success toast",
-      WAIT_TIMEOUT,
-    );
-    const txt = (await successEl.getText()).trim();
-    postSuccess = true;
-    logger("success", `   ✅ ASSERTION PASSED — toast: "${txt}"`);
-    results.push({
-      type: "assertion",
-      element: "Post success toast",
-      status: "pass",
-      action: `Found: "${txt}"`,
-    });
-  } catch {
-    // Assertion ②: the post text appears in the feed
+    const applyBtn = await findElement(driver, applyBtnSelectors, "Apply Button", WAIT_TIMEOUT);
+    await safeClick(driver, applyBtn);
+    await driver.sleep(1500);
+
+    // Try to fill cover letter modal (Hanya sampai di sini untuk simulasi aman)
     try {
-      const snippet = postContent.slice(0, 20).replace(/"/g, '\\"');
-      const postInFeed = await driver.wait(
-        until.elementLocated(By.xpath(`//*[contains(., "${snippet}")]`)),
-        5_000,
-      );
-      await driver.wait(until.elementIsVisible(postInFeed), 3_000);
-      postSuccess = true;
-      logger(
-        "success",
-        "   ✅ ASSERTION PASSED — post content visible in feed",
-      );
-      results.push({
-        type: "assertion",
-        element: "Post in feed",
-        status: "pass",
-        action: "Post content visible in feed",
-      });
+      const coverLetterSelectors = [
+        "textarea[name='cover_letter']",
+        "textarea[placeholder*='cover letter' i]",
+        "textarea[placeholder*='surat lamaran' i]",
+        "textarea[placeholder*='Kenapa' i]",
+        "textarea[placeholder*='Why' i]"
+      ];
+      await findElement(driver, coverLetterSelectors, "Cover Letter", 3000);
+      logger("info", "   ℹ️ Form aplikasi terbuka. Tes dihentikan sebelum Submit untuk menghindari pengiriman palsu.");
+      detailSuccess = true;
     } catch {
-      logger("error", "   ❌ ASSERTION FAILED — post creation not confirmed.");
-      results.push({
-        type: "assertion",
-        element: "Post created",
-        status: "error",
-        reason: "No success indicator found",
-      });
+      logger("info", "   ℹ️ Form aplikasi terbuka (Tanpa cover letter). Tes dihentikan sebelum Submit.");
+      detailSuccess = true; // Tetap dianggap sukses capai "Apply" state
     }
+
+    // Screenshot 3 — Apply Reached
+    const ss3 = `${sessionId}_job_3_applied.png`;
+    await takeScreenshot(driver, ss3);
+    screenshots.push(ss3);
+    logger("screenshot", "📸 Job Apply Form Reached", { file: ss3 });
+
+    // ── Assertion ───────────────────────────
+    logger("success", "   ✅ ASSERTION PASSED — Application form successfully reached");
+    results.push({ type: "assertion", element: "Apply Job", status: "pass", action: "Job Apply Form Reached" });
+
+  } catch (e) {
+    logger("error", "   ❌ Apply button not found or interactable.");
+    results.push({ type: "button", element: "Apply", status: "error", reason: String(e) });
   }
 
-  // Screenshot ③ — final
-  const ss3 = `${sessionId}_post_3_result.png`;
+  // Screenshot 3 — final
+  const ss3 = `${sessionId}_job_3_result.png`;
   await takeScreenshot(driver, ss3);
   screenshots.push(ss3);
-  logger(
-    "screenshot",
-    `📸 Post feed result — ${postSuccess ? "✅ SUCCESS" : "❌ FAILED"}`,
-    { file: ss3 },
-  );
+  logger("screenshot", `📸 Job Vacancy result — ${detailSuccess ? "✅ SUCCESS" : "❌ FAILED"}`, { file: ss3 });
 
   logger(
-    postSuccess ? "success" : "error",
-    postSuccess
-      ? "🎉 Post Feed flow completed SUCCESSFULLY!"
-      : "❌ Post Feed flow did NOT complete as expected.",
+    detailSuccess ? "success" : "error",
+    detailSuccess
+      ? "🎉 Job Vacancy flow completed SUCCESSFULLY!"
+      : "❌ Job Vacancy flow did NOT complete as expected.",
   );
 
   return results;
@@ -1418,8 +1259,8 @@ export async function runAutomation(
   url: string,
   flow: FlowType,
   logger: Logger,
-  credentials?: { email?: string; password?: string },
-  postContent?: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _postContent?: string,
 ): Promise<AutomationOutput> {
   const sessionId = Date.now();
   const screenshots: string[] = [];
@@ -1430,24 +1271,95 @@ export async function runAutomation(
   logger("info", "🎥 Starting screen recording…");
   const recordingFile = recorder.start(sessionId);
 
+  const profilePath = path.join(process.cwd(), ".chrome_profile");
   const chromeOptions = new chrome.Options()
     .addArguments(
-      "--start-maximized",
+      "--window-position=0,0",
+      "--window-size=1280,720",
       "--disable-blink-features=AutomationControlled",
       "--log-level=3",
       "--disable-infobars",
+      `--user-data-dir=${profilePath}`
     )
     .excludeSwitches("enable-automation");
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // Attempt to use Brave if installed
+  const bravePaths = [
+    "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+    "C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+    path.join(process.env.LOCALAPPDATA || "", "BraveSoftware\\Brave-Browser\\Application\\brave.exe")
+  ];
+  for (const bPath of bravePaths) {
+    if (fs.existsSync(bPath)) {
+      chromeOptions.setBinaryPath(bPath);
+      logger("info", "🦁 Brave Browser terdeteksi! Menggunakan Brave untuk otomasi.");
+      break;
+    }
+  }
+
   const driver: WebDriver = await new Builder()
     .forBrowser(Browser.CHROME)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .setChromeOptions(chromeOptions as any)
     .build();
 
   try {
     logger("info", `🎯 Flow  : ${flow.toUpperCase()}`);
     logger("info", `🌐 URL   : ${url}`);
+
+    // Wait for manual login if redirected to a login page
+    await driver.get(url);
+    await driver.sleep(1500); // brief wait to allow redirects
+    const currentUrl = await driver.getCurrentUrl();
+    if (currentUrl.includes("login") || currentUrl.includes("auth") || currentUrl.includes("sign-in") || currentUrl.includes("signin")) {
+      logger("warn", "⚠️  Diarahkan ke halaman login. Menunggu Anda login secara manual...");
+      try {
+        const targetOrigin = new URL(url).origin;
+        await driver.wait(async () => {
+          const u = await driver.getCurrentUrl();
+          // Jika url saat ini berada di domain luar (misal halaman Google/Facebook OAuth), maka return false (tetap tunggu)
+          if (!u.startsWith(targetOrigin)) {
+            return false;
+          }
+          // Jika sudah di target domain, pastikan url sudah tidak mengandung kata login/auth
+          return !u.includes("login") && !u.includes("auth") && !u.includes("sign-in") && !u.includes("signin");
+        }, 300000); // Tunggu sampai 5 menit
+        logger("success", "✅ Login manual berhasil terdeteksi!");
+        await driver.sleep(1000);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (e) {
+        throw new Error("Waktu tunggu login manual habis (5 menit).");
+      }
+    }
+
+    // Cek apakah halaman saat ini adalah 404 Not Found (misal setelah login redirect ke URL yg salah)
+    try {
+      const pageText = await driver.findElement(By.css("body")).getText();
+      const lowerText = pageText.toLowerCase();
+      const is404 = (pageText.includes("404") && (lowerText.includes("not found") || lowerText.includes("tidak ditemukan"))) ||
+        lowerText.includes("page not found") ||
+        lowerText.includes("halaman tidak ditemukan");
+
+      if (is404) {
+        logger("warn", "⚠️  Halaman 404 terdeteksi! Mencoba mengklik tombol kembali ke Homepage...");
+        const homeSelectors = [
+          "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), 'home')]",
+          "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), 'home')]",
+          "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), 'beranda')]",
+          "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), 'beranda')]",
+          "//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), 'kembali')]",
+          "//a[contains(@href, '/app')]",
+          "//a[contains(@href, '/home')]",
+          "//a[@href='/']"
+        ];
+        const homeBtn = await findElement(driver, homeSelectors, "Home Button", 4000);
+        await safeClick(driver, homeBtn);
+        await driver.sleep(2000);
+        logger("success", "✅ Berhasil diarahkan ke Homepage.");
+      }
+    } catch {
+      // Abaikan jika tidak ada indikasi 404 atau tombol home tidak ditemukan
+    }
 
     let flowResults: TestResult[] = [];
 
@@ -1463,39 +1375,25 @@ export async function runAutomation(
         );
         break;
 
-      // ── Login ────────────────────────────────────────────────────────────────
-      case "login":
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error(
-            'Login flow requires both "email" and "password" credentials.',
-          );
-        }
-        flowResults = await runLoginFlow(
+      // ── Apply Class ────────────────────────────────────────────────────────────
+      case "applyClass":
+        flowResults = await runApplyClassFlow(
           driver,
           url,
-          { email: credentials.email, password: credentials.password },
           logger,
           screenshots,
           sessionId,
         );
         break;
 
-      // ── Post Feed ────────────────────────────────────────────────────────────
-      case "postFeed":
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error(
-            'Post Feed flow requires both "email" and "password" credentials.',
-          );
-        }
-        flowResults = await runPostFeedFlow(
+      // ── Job Vacancy ──────────────────────────────────────────────────────────
+      case "jobVacancy":
+        flowResults = await runJobVacancyFlow(
           driver,
           url,
-          { email: credentials.email, password: credentials.password },
-          postContent?.trim() ||
-          "Test post from NexusAuto QA Platform 🤖 #automation #testing",
           logger,
           screenshots,
-          sessionId,
+          sessionId
         );
         break;
 

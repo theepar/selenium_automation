@@ -11,9 +11,9 @@ const BLOCKED_HOSTNAMES = ["localhost", "127.0.0.1", "0.0.0.0", "::1"];
 const PRIVATE_IP_PATTERN =
   /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/;
 const MAX_URL_LENGTH = 2_048;
-const MAX_CREDENTIAL_LENGTH = 256;
+
 const MAX_POST_CONTENT_LENGTH = 2_000;
-const VALID_FLOWS: FlowType[] = ["login", "register", "postFeed"];
+const VALID_FLOWS: FlowType[] = ["register", "applyClass", "jobVacancy"];
 
 // ─── Validators ───────────────────────────────────────────────────────────────
 
@@ -59,7 +59,7 @@ function validateFlow(
   if (!flow || typeof flow !== "string")
     return {
       valid: false,
-      error: 'Flow is required. Must be "login", "register", or "postFeed".',
+      error: 'Flow is required. Must be "register", "applyClass", or "jobVacancy".',
     };
   if (!VALID_FLOWS.includes(flow as FlowType))
     return {
@@ -67,25 +67,6 @@ function validateFlow(
       error: `Invalid flow "${flow}". Must be one of: ${VALID_FLOWS.join(", ")}.`,
     };
   return { valid: true, flow: flow as FlowType };
-}
-
-function sanitizeCredentials(
-  credentials: unknown,
-): { email?: string; password?: string } | undefined {
-  if (!credentials || typeof credentials !== "object") return undefined;
-  const raw = credentials as Record<string, unknown>;
-
-  const email =
-    typeof raw.email === "string"
-      ? raw.email.slice(0, MAX_CREDENTIAL_LENGTH).trim()
-      : undefined;
-  const password =
-    typeof raw.password === "string"
-      ? raw.password.slice(0, MAX_CREDENTIAL_LENGTH)
-      : undefined;
-
-  if (!email && !password) return undefined;
-  return { email, password };
 }
 
 function sanitizePostContent(value: unknown): string | undefined {
@@ -99,7 +80,7 @@ function sanitizePostContent(value: unknown): string | undefined {
 export async function POST(req: NextRequest) {
   let targetUrl: string;
   let flow: FlowType;
-  let credentials: { email?: string; password?: string } | undefined;
+
   let postContent: string | undefined;
 
   // ── Parse & validate body ──────────────────────────────────────────────────
@@ -122,20 +103,6 @@ export async function POST(req: NextRequest) {
     if (!flowValidation.valid)
       return Response.json({ error: flowValidation.error }, { status: 422 });
     flow = flowValidation.flow;
-
-    // Credentials (required for login / postFeed)
-    credentials = sanitizeCredentials(body.credentials);
-    if (
-      (flow === "login" || flow === "postFeed") &&
-      (!credentials?.email || !credentials?.password)
-    ) {
-      return Response.json(
-        {
-          error: `Flow "${flow}" requires both email and password credentials.`,
-        },
-        { status: 422 },
-      );
-    }
 
     // Post content (optional — automator supplies a default if absent)
     postContent = sanitizePostContent(body.postContent);
@@ -172,7 +139,6 @@ export async function POST(req: NextRequest) {
           targetUrl,
           flow,
           logger,
-          credentials,
           postContent,
         );
 

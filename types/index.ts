@@ -1,6 +1,6 @@
 // ─── Flow Types ───────────────────────────────────────────────────────────────
 
-export type FlowType = "login" | "register" | "postFeed";
+export type FlowType = "register" | "applyClass" | "jobVacancy";
 
 // ─── Automation Result Types ──────────────────────────────────────────────────
 

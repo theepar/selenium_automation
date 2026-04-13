@@ -1,97 +1,65 @@
-# Scrutiny
+# SocialVit Web Automation
 
-A web QA automation platform built with **Next.js 15**, **TypeScript**, and **Selenium WebDriver**. Scrutiny crawls every page of a given URL, fills all forms with contextual test data, clicks every interactive element, captures screenshots at each stage, and records the full browser session as a video.
+Platform otomasi pengujian Web **End-to-End (E2E)** yang dibangun menggunakan **Next.js 15**, **TypeScript**, dan **Selenium WebDriver**. Aplikasi ini dirancang khusus untuk mensimulasikan perjalanan pengguna (User Journey) yang paling kritikal di platform **SocialVit**, mulai dari registrasi akun baru hingga berpartisipasi dalam event komunitas dan loker.
 
-## Features
+Aplikasi ini tidak lagi berjalan sebagai *crawler* buta, melainkan difokuskan untuk menjalankan 3 Skenario BDD (*Behavior-Driven Development*) terstruktur. Seluruh log pergerakan robot akan disiarkan langsung (SSE) ke UI, dilengkapi tangkapan layar di setiap tahapan, dan perekaman sesi test penuh berbasis gdigrab/ffmpeg.
 
-- **Deep Page Crawling** — BFS crawl across all internal pages and subdomains (up to 20 pages), including `/login`, `/register`, `/dashboard`, and any other routes.
-- **Intelligent Form Filling** — Detects input type and context (label, placeholder, name) to fill fields with relevant dummy data. Supports custom login credentials for authenticated flows.
-- **Button & Interaction Testing** — Clicks every visible, enabled button and submit input, then restores the original page if navigation occurs.
-- **Progressive Scrolling** — Scrolls each page fully before interaction to trigger lazy-loaded elements.
-- **Automatic Screenshots** — Captures page state before and after form fills. Old screenshots are cleaned up at the start of each test run.
-- **Full Session Recording** — Records the entire browser session as an `.mp4` using `ffmpeg-static`. The video can be played or downloaded directly from the UI.
-- **OAuth / Manual Login Support** — If a login or OAuth page is detected, automation pauses for 30 seconds to allow manual intervention.
-- **Real-time Streaming Logs** — Uses Server-Sent Events (SSE) to stream progress logs to the UI as the automation runs.
-- **Input Validation & Security** — The API validates all incoming URLs (protocol, private IP, localhost), sanitizes credentials, and rejects malformed requests before any automation starts.
+---
 
-## Tech Stack
+## 🚀 3 Fitur Flow Utama
+
+### 1. Flow Register (`register`)
+**Tujuan:** Menguji keandalan *entry point* pengguna perdana.
+- Robot akan mengarahkan browser ke halaman Register (`/auth/register`).
+- Melakukan pengisian data profil secara utuh (Nama Lengkap, Email test generate, Password).
+- Mengeklik submit, dan mendeteksi berbagai jenis peringatan validasi (misal: *Email Already Exists*) maupun kesuksesan navigasi pasca-daftar.
+
+### 2. Flow Apply Class (`applyClass`)
+**Tujuan:** Menguji kelancaran konversi ekosistem *Learning & Community*.
+- Bergerak menuju panggung `/app/learning/community` atau area kelas.
+- Pemindaian algoritma pintar untuk mengenali spesifik bagian interior *Class Card* (teks *'Materi'* atau *'Harga'*) untuk mencegah misklik pada Sidebar Navigation.
+- Menekan tombol **Daftar** pada *Overview/Detail Class* secara proaktif.
+- **Auto-Stop Safely:** Jika diarahkan ke fase Pembayaran/Payment Dropoff, skrip akan memberi validasi `PASS` dan menghentikan diri. Ini memastikan database asli tidak disusupi oleh pembelian kelas palsu.
+
+### 3. Flow Job Vacancy (`jobVacancy`)
+**Tujuan:** Mengetes navigasi fitur Karir dan Loker spesifik.
+- Robot akan mendarat di `/app/growth/job-vacancy` dan membuka menu sidebar filter melalui ikon *Blue Hamburger (Garis 3)*.
+- Memproses *event bubbling* pada Radio Button untuk menyaring lowongan khusus pekerja **Full Time**.
+- Memilih lowongan teratas, memicu navigasi *New Tab Detail Page*, dan mengeklik tombol "Lamar" (Apply).
+- **Safe Evaluation:** Robot membuka wujud formulir modal lamaran / cover letter, memverifikasinya, namun berhenti sebelum menekan `Kirim Lamaran` agar perusahaan afiliasi tidak dibombardir data bodong.
+
+---
+
+## 🛠 Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 15 (App Router, Turbopack) |
-| Language | TypeScript 5 |
-| Automation | Selenium WebDriver 4 with Selenium Manager |
-| Screen Recording | ffmpeg-static (bundled binary) |
-| Styling | Tailwind CSS v4 |
-| Icons | Lucide React |
-| Runtime | Node.js 20+ |
+| User Interface | Next.js 15 (App Router, Turbopack) & Tailwind CSS v4 |
+| Engine | TypeScript 5 |
+| Driver Otomasi | Selenium WebDriver 4 dengan Persistent Chrome |
+| Screen Recording | ffmpeg-static (GDI Grab) |
 
-## Requirements
+---
 
-- **Node.js** v20 LTS or newer
-- **Google Chrome** (latest stable) — ChromeDriver is managed automatically by Selenium Manager, no manual installation needed.
-- **Windows** — The screen recorder uses `gdigrab` (Windows GDI capture). Linux/macOS support requires changing the ffmpeg input driver in `lib/recorder.ts`.
+## ⚙️ Persyaratan Sistem
 
-## Getting Started
+- **Node.js** v20 LTS ke atas.
+- **Google Chrome** atau **Brave Browser** — Script telah dioptimalkan untuk memprioritaskan profil lokal `.chrome_profile` sehingga status *Login Default* otomatis terus tersimpan melampaui antar-sesi tes.
+- **Sistem Operasi** — Fitur screen recorder sementara dikonfigurasikan menggunakan input API Windows GDI (`gdigrab`). Penggunaan di atas Linux/Mac perlu mengubah args `ffmpeg` di `lib/recorder.ts`.
 
-```bash
-# 1. Install dependencies
-npm install
+---
 
-# 2. Start the development server
-npm run dev
-```
+## 🏁 Memulai Test (Getting Started)
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Usage
-
-1. Enter a target URL in the input field (must be a valid `http://` or `https://` address).
-2. Optionally expand **Login Credentials** and enter an email and password if the site requires authentication.
-3. Click **Run Test**.
-4. Watch the log panel for live progress. If a Google OAuth or SSO page is detected, switch to the Chrome window and log in manually within 30 seconds.
-5. When complete, review the **Results Table**, **Screenshots**, and **Session Recording** sections.
-6. Click **Reset** to clear all state and run a new test.
-
-## Project Structure
-
-```
-web-automation/
-├── app/
-│   ├── globals.css          # Tailwind v4 config & global styles
-│   ├── layout.tsx           # Root layout & metadata
-│   ├── page.tsx             # Main UI (client component)
-│   └── api/run-test/
-│       └── route.ts         # SSE stream endpoint — URL validation & automation trigger
-├── components/
-│   ├── Header.tsx
-│   ├── LogPanel.tsx
-│   ├── ResultsTable.tsx
-│   └── ScreenshotGallery.tsx
-├── lib/
-│   ├── automator.ts         # Core Selenium logic — crawl, fill, click, screenshot
-│   └── recorder.ts          # ffmpeg screen recorder (start/stop)
-├── public/
-│   ├── screenshots/         # Auto-generated per run (git-ignored)
-│   └── recordings/          # Auto-generated per run (git-ignored)
-├── types/
-│   └── index.ts             # Shared TypeScript types
-└── package.json
-```
-
-## Security
-
-The API endpoint (`/api/run-test`) enforces the following before starting any automation:
-
-- **Protocol check** — Only `http` and `https` are accepted.
-- **Localhost/loopback block** — `localhost`, `127.0.0.1`, `0.0.0.0`, and `::1` are rejected.
-- **Private IP block** — RFC-1918 ranges (`10.x`, `172.16–31.x`, `192.168.x`) and link-local addresses are rejected.
-- **URL length limit** — URLs over 2048 characters are rejected.
-- **Credential sanitization** — Credentials are trimmed and capped at 256 characters each.
-
-## Maintenance Notes
-
-- **Increasing the crawl limit** — Change `MAX_PAGES` in `lib/automator.ts`.
-- **Adding new auto-fill values** — Extend `fieldValueMap` in the `getFillValue` function in `lib/automator.ts`.
-- **Linux/macOS recording** — Replace `-f gdigrab -i desktop` with `-f x11grab -i :0` (Linux) or `-f avfoundation -i "1"` (macOS) in `lib/recorder.ts`.
-- **OAuth pause duration** — The 30-second manual login window is controlled by `driver.sleep(30000)` in `testPage()` inside `lib/automator.ts`.
+1. Lakukan instalasi seluruh *dependencies* pendukung:
+   ```bash
+   npm install
+   ```
+2. Jalankan aplikasi menggunakan mode lokal turbopack:
+   ```bash
+   npm run dev
+   ```
+3. Akses laman dasbor kontrol otomasi di [http://localhost:3000](http://localhost:3000)
+4. Pastikan browser anda di-login-kan secara manual pada SocialVit terlebih dahulu pada tes putaran pertama (*Sistem akan mengingat sesi login di test ke-2 dan seterusnya*).
+5. Pilih salah satu model flow **Register**, **Apply Class**, atau **Job Vacancy** pada dropdown panel sebelah kiri.
+6. Pantau **Log Terminal SSE** menyala dan amati robot bekerja menyelesaikan target-target BDD secara *Real-time*. Hasil tangkapan layar/video akan otomatis terbit begitu tes rampung.
