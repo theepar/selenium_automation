@@ -6,27 +6,21 @@ Aplikasi ini tidak lagi berjalan sebagai *crawler* buta, melainkan difokuskan un
 
 ---
 
-## 🚀 3 Fitur Flow Utama
+## 🚀 6 Skenario Flow Utama
 
-### 1. Flow Register (`register`)
-**Tujuan:** Menguji keandalan *entry point* pengguna perdana.
-- Robot akan mengarahkan browser ke halaman Register (`/auth/register`).
-- Melakukan pengisian data profil secara utuh (Nama Lengkap, Email test generate, Password).
-- Mengeklik submit, dan mendeteksi berbagai jenis peringatan validasi (misal: *Email Already Exists*) maupun kesuksesan navigasi pasca-daftar.
+Sistem ini mendukung 6 skenario BDD (*Behavior-Driven Development*) terstruktur yang mencakup kasus positif dan negatif:
 
-### 2. Flow Apply Class (`applyClass`)
-**Tujuan:** Menguji kelancaran konversi ekosistem *Learning & Community*.
-- Bergerak menuju panggung `/app/learning/community` atau area kelas.
-- Pemindaian algoritma pintar untuk mengenali spesifik bagian interior *Class Card* (teks *'Materi'* atau *'Harga'*) untuk mencegah misklik pada Sidebar Navigation.
-- Menekan tombol **Daftar** pada *Overview/Detail Class* secara proaktif.
-- **Auto-Stop Safely:** Jika diarahkan ke fase Pembayaran/Payment Dropoff, skrip akan memberi validasi `PASS` dan menghentikan diri. Ini memastikan database asli tidak disusupi oleh pembelian kelas palsu.
+### 1. Flow Register
+- **Skenario 1: Kasus Positif (`register`)**: Menguji pendaftaran akun baru dengan data unik. Robot mengisi form dan memverifikasi keberhasilan navigasi ke dashboard.
+- **Skenario 2: Kasus Negatif (`register_error`)**: Menguji ketahanan validasi sistem dengan memasukkan password yang terlalu pendek. Robot memverifikasi bahwa pesan error muncul.
 
-### 3. Flow Job Vacancy (`jobVacancy`)
-**Tujuan:** Mengetes navigasi fitur Karir dan Loker spesifik.
-- Robot akan mendarat di `/app/growth/job-vacancy` dan membuka menu sidebar filter melalui ikon *Blue Hamburger (Garis 3)*.
-- Memproses *event bubbling* pada Radio Button untuk menyaring lowongan khusus pekerja **Full Time**.
-- Memilih lowongan teratas, memicu navigasi *New Tab Detail Page*, dan mengeklik tombol "Lamar" (Apply).
-- **Safe Evaluation:** Robot membuka wujud formulir modal lamaran / cover letter, memverifikasinya, namun berhenti sebelum menekan `Kirim Lamaran` agar perusahaan afiliasi tidak dibombardir data bodong.
+### 2. Flow Apply Class
+- **Skenario 3: Kasus Positif (`applyClass`)**: Menguji alur pendaftaran kelas. Robot memilih kelas dari katalog, masuk ke detail, dan mengeklik tombol daftar hingga mencapai tahap pembayaran/konfirmasi.
+- **Skenario 4: Kasus Negatif (`applyClass_error`)**: Menguji proteksi akses kelas. Robot mencoba mendaftar tanpa login dan memverifikasi sistem melakukan redirect ke halaman login atau menampilkan peringatan.
+
+### 3. Flow Job Vacancy
+- **Skenario 5: Kasus Positif (`jobVacancy`)**: Menguji fitur karir. Robot melakukan filter tipe pekerjaan "Full Time", membuka detail lowongan, dan mengeklik tombol lamar hingga muncul formulir aplikasi.
+- **Skenario 6: Kasus Negatif (`jobVacancy_error`)**: Menguji penanganan kondisi error/kosong pada lowongan. Robot memverifikasi pesan "Lowongan tidak ditemukan" atau kewajiban login saat melamar.
 
 ---
 

@@ -13,7 +13,14 @@ const PRIVATE_IP_PATTERN =
 const MAX_URL_LENGTH = 2_048;
 
 const MAX_POST_CONTENT_LENGTH = 2_000;
-const VALID_FLOWS: FlowType[] = ["register", "applyClass", "jobVacancy"];
+const VALID_FLOWS: FlowType[] = [
+  "register",
+  "applyClass",
+  "jobVacancy",
+  "register_error",
+  "applyClass_error",
+  "jobVacancy_error",
+];
 
 // ─── Validators ───────────────────────────────────────────────────────────────
 

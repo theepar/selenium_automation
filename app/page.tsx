@@ -68,6 +68,36 @@ const FLOWS: FlowOption[] = [
     selectedDot: "bg-purple-500",
     hoverBorder: "hover:border-purple-500/40",
   },
+  {
+    id: "register_error",
+    label: "Register (Error Version)",
+    description: "Sengaja memasukkan password yang terlalu pendek (123) untuk mengetes validasi error.",
+    icon: <Sparkles size={20} className="text-red-400" />,
+    selectedCard: "border-red-500 bg-red-500/10",
+    selectedIcon: "text-red-400",
+    selectedDot: "bg-red-500",
+    hoverBorder: "hover:border-red-500/40",
+  },
+  {
+    id: "applyClass_error",
+    label: "Apply Class (Error Version)",
+    description: "Mengetes flow pendaftaran kelas dalam kondisi tidak ideal atau tanpa login.",
+    icon: <RotateCcw size={20} className="text-red-400" />,
+    selectedCard: "border-red-500 bg-red-500/10",
+    selectedIcon: "text-red-400",
+    selectedDot: "bg-red-500",
+    hoverBorder: "hover:border-red-500/40",
+  },
+  {
+    id: "jobVacancy_error",
+    label: "Job Vacancy (Error Version)",
+    description: "Mengetes flow lowongan kerja dengan skenario yang memicu error validasi.",
+    icon: <Briefcase size={20} className="text-red-400" />,
+    selectedCard: "border-red-500 bg-red-500/10",
+    selectedIcon: "text-red-400",
+    selectedDot: "bg-red-500",
+    hoverBorder: "hover:border-red-500/40",
+  },
 ];
 
 // ─── Page component ───────────────────────────────────────────────────────────
@@ -80,6 +110,9 @@ export default function HomePage() {
     register: "/app/register",
     applyClass: "/app/learning/community",
     jobVacancy: "/app/growth/job-vacancy",
+    register_error: "/app/register",
+    applyClass_error: "/app/learning/community",
+    jobVacancy_error: "/app/growth/job-vacancy",
   };
 
   const [targetUrl, setTargetUrl] = useState(DEFAULT_BASE + "/");
@@ -498,9 +531,9 @@ export default function HomePage() {
                     <>
                       Running&nbsp;
                       <span className="font-semibold text-slate-200">
-                        {selectedFlow === "jobVacancy"
+                        {selectedFlow === "jobVacancy" || selectedFlow === "jobVacancy_error"
                           ? "Job Vacancy Flow"
-                          : selectedFlow === "register"
+                          : selectedFlow === "register" || selectedFlow === "register_error"
                             ? "Register Flow"
                             : "Apply Class Flow"}
                       </span>

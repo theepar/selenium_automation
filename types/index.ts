@@ -1,6 +1,12 @@
 // ─── Flow Types ───────────────────────────────────────────────────────────────
 
-export type FlowType = "register" | "applyClass" | "jobVacancy";
+export type FlowType =
+  | "register"
+  | "applyClass"
+  | "jobVacancy"
+  | "register_error"
+  | "applyClass_error"
+  | "jobVacancy_error";
 
 // ─── Automation Result Types ──────────────────────────────────────────────────
 
